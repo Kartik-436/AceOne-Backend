@@ -1,21 +1,32 @@
 const jwt = require('jsonwebtoken');
 const sendResponse = require('../utils/Send-Response.js');
 
-async function isLoggedIn(req, res, next) {
+async function authenticateUser(req, res, next) {
     const token = req.cookies.token;
+    const sessionId = req.cookies.sessionId;
 
-    if (!token) {
-        return sendResponse(res, 401, false, "Authentication required. Please log in.");
+    if (token) {
+        try {
+            const data = jwt.verify(token, process.env.JWT_SECRET);
+            req.user = data;
+        } catch (err) {
+            req.cookies.token = null;
+
+            if (!sessionId) {
+                req.sessionId = Math.random().toString(36).substring(2);
+                res.cookie("sessionId", req.sessionId, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 });
+            } else {
+                req.sessionId = sessionId;
+            }
+        }
+    } else if (sessionId) {
+        req.sessionId = sessionId;
+    } else {
+        req.sessionId = Math.random().toString(36).substring(2);
+        res.cookie("sessionId", req.sessionId, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 });
     }
 
-    try {
-        const data = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = data;
-        next();
-    } catch (err) {
-        console.error("JWT Verification Error:", err.message);
-        return sendResponse(res, 401, false, "Invalid or expired token. Please log in again.");
-    }
+    next();
 }
 
 function LogProfileIfCookiePresent(req, res, next) {
@@ -35,4 +46,4 @@ function LogProfileIfCookiePresent(req, res, next) {
     }
 }
 
-module.exports = { isLoggedIn, LogProfileIfCookiePresent };
+module.exports = { authenticateUser, LogProfileIfCookiePresent };

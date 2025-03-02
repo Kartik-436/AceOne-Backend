@@ -173,15 +173,21 @@ async function resetPassword(req, res) {
 
 async function getUserProfile(req, res) {
     try {
-        const user = await UserModel.findById(req.user.ID).select('-password');
+        const user = await UserModel.findById(req.user.ID);
 
         if (!user) {
             return sendResponse(res, 400, false, "User not found.");
         }
-        const base64Image = `data:${user.picture.contentType};base64,${user.picture.data.toString("base64")}`;
+
+        // Check if picture exists and has valid data before converting to base64
+        let base64Image = null;
+        if (user.picture && user.picture.data) {
+            base64Image = `data:${user.picture.contentType};base64,${user.picture.data.toString("base64")}`;
+        }
+
         return sendResponse(res, 200, true, "User profile fetched successfully.", {
-            ...user.toObject(), // Include other user data
-            picture: base64Image, // Send Base64 image
+            ...user.toObject(),
+            picture: base64Image, // Will be null if no valid picture data
         });
     } catch (err) {
         dbgr("Get User Profile Error:", err.message);
@@ -217,7 +223,15 @@ async function updateUserProfile(req, res) {
             return sendResponse(res, 400, false, "Email updates are not allowed directly.");
         }
 
-        return sendResponse(res, 200, true, "User profile updated successfully.", user);
+        let base64Image = null;
+        if (user.picture && user.picture.data) {
+            base64Image = `data:${user.picture.contentType};base64,${user.picture.data.toString("base64")}`;
+        }
+
+        return sendResponse(res, 200, true, "User profile fetched successfully.", {
+            ...user.toObject(),
+            picture: base64Image,
+        });
     } catch (err) {
         console.error("Update User Profile Error:", err.message);
         return sendResponse(res, 500, false, "Something went wrong.");
@@ -246,37 +260,58 @@ async function updateProfilePicture(req, res) {
     }
 }
 
-
 async function getUserCart(req, res) {
     try {
-        let userId = req.user ? req.user.ID : null;
-        let sessionId = req.cookies.sessionId;
+        const userId = req.user?.ID || null;
+        const sessionId = req.cookies.sessionId;
+
+        mergeCartsAfterLogin(userId, sessionId);
 
         if (!userId && !sessionId) {
-            sessionId = Math.random().toString(36).substring(2);
-            res.cookie("sessionId", sessionId, { httpOnly: true });
-            cart = new CartModel({ userId, sessionId, items: [] });
             return sendResponse(res, 200, true, "Cart is empty.", []);
         }
 
-        const cart = await CartModel.findOne({
-            $or: [
-                userId ? { userId } : null,
-                sessionId ? { sessionId } : null
-            ].filter(Boolean)
-        }).populate('items.productId');
+        const query = userId ? { userId } : { sessionId };
+        const cart = await CartModel.findOne(query).populate('items.productId');
 
-        if (!cart) {
+        if (!cart || cart.items.length === 0) {
             return sendResponse(res, 200, true, "Cart is empty.", []);
         }
 
-        return sendResponse(res, 200, true, "User cart fetched successfully.", cart.items);
+        // Filter out invalid items (e.g., deleted products)
+        const validItems = cart.items.filter(item => item.productId);
+
+        // If there were invalid items, update the cart silently
+        if (validItems.length !== cart.items.length) {
+            cart.items = validItems;
+            await cart.save();
+
+            // Sync with UserModel if logged in
+            if (userId) {
+                await UserModel.findByIdAndUpdate(
+                    userId,
+                    { $set: { cart: cart._id } },
+                    { new: true }
+                );
+            }
+        }
+
+        const formattedItems = validItems.map(item => ({
+            ...item.toObject(),
+            productId: item.productId ? {
+                ...item.productId.toObject(),
+                image: item.productId.image?.data
+                    ? `data:${item.productId.image.contentType};base64,${item.productId.image.data.toString("base64")}`
+                    : null
+            } : null
+        }));
+
+        return sendResponse(res, 200, true, "User cart fetched successfully.", formattedItems);
     } catch (err) {
-        dbgr("Get User Cart Error:", err.message);
-        return sendResponse(res, 500, false, "Something went wrong.");
+        console.error("Get User Cart Error:", err);
+        return sendResponse(res, 500, false, "Something went wrong.", err.message);
     }
 }
-
 
 async function addToCart(req, res) {
     try {
@@ -288,40 +323,88 @@ async function addToCart(req, res) {
 
         const product = await ProductModel.findById(productID);
         if (!product) {
-            return sendResponse(res, 400, false, "Product not found.");
+            return sendResponse(res, 404, false, "Product not found.");
         }
 
-        let userId = req.user ? req.user.ID : null;
+        // Get identification info
+        let userId = req.user?.ID || null;
         let sessionId = req.cookies.sessionId;
 
+        // Ensure we have a sessionId for non-logged in users
         if (!userId && !sessionId) {
             sessionId = Math.random().toString(36).substring(2);
-            res.cookie("sessionId", sessionId, { httpOnly: true });
+            res.cookie("sessionId", sessionId, {
+                httpOnly: true,
+                maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+                sameSite: 'strict'
+            });
         }
 
-        let cart = await CartModel.findOne({
-            $or: [
-                userId ? { userId } : null,
-                sessionId ? { sessionId } : null
-            ].filter(Boolean)
-        });
+        // Ensure quantity is a positive integer
+        const validQuantity = Math.max(1, parseInt(quantity, 10) || 1);
+
+        // Prevent adding more than available stock
+        if (validQuantity > product.stock) {
+            return sendResponse(res, 400, false, `Only ${product.stock} units available.`);
+        }
+
+        // Find cart associated with either userId or sessionId
+        const query = userId ? { userId } : { sessionId };
+        let cart = await CartModel.findOne(query);
 
         if (!cart) {
-            cart = new CartModel({ userId, sessionId, items: [] });
+            // Create new cart with appropriate identifier
+            cart = new CartModel({
+                ...(userId ? { userId } : { sessionId }),
+                items: []
+            });
         }
 
-        const existingItem = cart.items.find((item) => item.productId.toString() === productID);
-        if (existingItem) {
-            existingItem.quantity += quantity;
+        const existingItemIndex = cart.items.findIndex(
+            (item) => item.productId && item.productId.toString() === productID
+        );
+
+        if (existingItemIndex !== -1) {
+            // Update existing item
+            const newQuantity = cart.items[existingItemIndex].quantity + validQuantity;
+
+            if (newQuantity > product.stock) {
+                return sendResponse(res, 400, false, `Cannot add more than ${product.stock} units.`);
+            }
+
+            cart.items[existingItemIndex].quantity = newQuantity;
         } else {
-            cart.items.push({ productId: productID, quantity });
+            // Add new item
+            cart.items.push({ productId: productID, quantity: validQuantity });
         }
 
         await cart.save();
-        return sendResponse(res, 200, true, "Product added to cart.", cart.items);
+
+        // Update UserModel if logged in
+        if (userId) {
+            await UserModel.findByIdAndUpdate(
+                userId,
+                { $set: { cart: cart._id } },
+                { new: true }
+            );
+        }
+
+        // Return the cart with populated product details
+        const populatedCart = await CartModel.findById(cart._id).populate('items.productId');
+        const formattedItems = populatedCart.items.map(item => ({
+            ...item.toObject(),
+            productId: item.productId ? {
+                ...item.productId.toObject(),
+                image: item.productId.image?.data
+                    ? `data:${item.productId.image.contentType};base64,${item.productId.image.data.toString("base64")}`
+                    : null
+            } : null
+        }));
+
+        return sendResponse(res, 200, true, "Product added to cart.", formattedItems);
     } catch (err) {
-        dbgr("Add To Cart Error:", err.message);
-        return sendResponse(res, 500, false, "Something went wrong.");
+        console.error("Add To Cart Error:", err);
+        return sendResponse(res, 500, false, "Something went wrong.", err.message);
     }
 }
 
@@ -329,24 +412,31 @@ async function addToCart(req, res) {
 async function updateCartQuantity(req, res) {
     try {
         const { productID, change } = req.body;
-        let sessionId = req.cookies.sessionId;
+        const userId = req.user?.ID || null;
+        const sessionId = req.cookies.sessionId;
 
-        if (!sessionId) {
-            return sendResponse(res, 400, false, "No session found.");
+        if (!userId && !sessionId) {
+            return sendResponse(res, 400, false, "No user or session found.");
         }
 
+        if (!productID) {
+            return sendResponse(res, 400, false, "Product ID is required.");
+        }
 
         const changeValue = Number(change);
         if (isNaN(changeValue)) {
             return sendResponse(res, 400, false, "Invalid quantity change value.");
         }
 
-        let cart = await CartModel.findOne({ sessionId });
-        if (!cart) return sendResponse(res, 404, false, "Cart not found.");
+        // Find cart with proper query
+        const query = userId ? { userId } : { sessionId };
+        const cart = await CartModel.findOne(query);
 
-        dbgr("Cart items before update:", JSON.stringify(cart.items, null, 2));
-        dbgr("Received productID:", productID, "Change Value:", changeValue);
+        if (!cart) {
+            return sendResponse(res, 404, false, "Cart not found.");
+        }
 
+        // Find the item in the cart
         const itemIndex = cart.items.findIndex(item =>
             String(item.productId) === String(productID) ||
             String(item.productId?._id) === String(productID)
@@ -356,7 +446,22 @@ async function updateCartQuantity(req, res) {
             return sendResponse(res, 404, false, "Product not found in cart.");
         }
 
+        // Calculate new quantity
         const updatedQuantity = cart.items[itemIndex].quantity + changeValue;
+
+        // Check product stock if increasing quantity
+        if (changeValue > 0) {
+            const product = await ProductModel.findById(productID);
+            if (!product) {
+                return sendResponse(res, 404, false, "Product not found.");
+            }
+
+            if (updatedQuantity > product.stock) {
+                return sendResponse(res, 400, false, `Cannot add more than ${product.stock} units.`);
+            }
+        }
+
+        // Remove item or update quantity
         if (updatedQuantity <= 0) {
             cart.items.splice(itemIndex, 1);
         } else {
@@ -364,45 +469,61 @@ async function updateCartQuantity(req, res) {
         }
 
         await cart.save();
-        dbgr("Cart items after update:", JSON.stringify(cart.items, null, 2));
 
-        return sendResponse(res, 200, true, "Cart updated successfully.", cart.items);
+        // Update UserModel if logged in
+        if (userId) {
+            await UserModel.findByIdAndUpdate(
+                userId,
+                { $set: { cart: cart._id } },
+                { new: true }
+            );
+        }
+
+        // Return updated cart with populated products
+        const populatedCart = await CartModel.findById(cart._id).populate('items.productId');
+        const formattedItems = populatedCart.items.map(item => ({
+            ...item.toObject(),
+            productId: item.productId ? {
+                ...item.productId.toObject(),
+                image: item.productId.image?.data
+                    ? `data:${item.productId.image.contentType};base64,${item.productId.image.data.toString("base64")}`
+                    : null
+            } : null
+        }));
+
+        return sendResponse(res, 200, true, "Cart updated successfully.", formattedItems);
     } catch (err) {
-        dbgr("Update Cart Quantity Error:", err.message);
-        return sendResponse(res, 500, false, "Something went wrong.");
+        console.error("Update Cart Quantity Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong.", err.message);
     }
 }
-
-
 
 async function removeFromCart(req, res) {
     try {
         const { productID } = req.body;
+        const userId = req.user?.ID || null;
+        const sessionId = req.cookies.sessionId;
 
         if (!productID) {
             return sendResponse(res, 400, false, "Product ID is required.");
         }
 
-        let userId = req.user ? req.user.ID : null;
-        let sessionId = req.cookies.sessionId;
-
         if (!userId && !sessionId) {
             return sendResponse(res, 400, false, "No user or session found.");
         }
 
-        const cart = await CartModel.findOne({
-            $or: [
-                userId ? { userId } : null,
-                sessionId ? { sessionId } : null
-            ].filter(Boolean)
-        });
+        // Find cart with proper query
+        const query = userId ? { userId } : { sessionId };
+        const cart = await CartModel.findOne(query);
 
         if (!cart || !cart.items.length) {
             return sendResponse(res, 404, false, "Cart is empty.");
         }
 
         const initialLength = cart.items.length;
-        cart.items = cart.items.filter(item => item.productId.toString() !== productID);
+        cart.items = cart.items.filter(item =>
+            item.productId && item.productId.toString() !== productID
+        );
 
         if (cart.items.length === initialLength) {
             return sendResponse(res, 404, false, "Product not found in cart.");
@@ -410,32 +531,184 @@ async function removeFromCart(req, res) {
 
         await cart.save();
 
-        return sendResponse(res, 200, true, "Product removed from cart successfully.", cart.items);
+        // Update UserModel if logged in
+        if (userId) {
+            await UserModel.findByIdAndUpdate(
+                userId,
+                { $set: { cart: cart._id } },
+                { new: true }
+            );
+        }
+
+        // Return updated cart with populated products
+        const populatedCart = await CartModel.findById(cart._id).populate('items.productId');
+        const formattedItems = populatedCart.items.map(item => ({
+            ...item.toObject(),
+            productId: item.productId ? {
+                ...item.productId.toObject(),
+                image: item.productId.image?.data
+                    ? `data:${item.productId.image.contentType};base64,${item.productId.image.data.toString("base64")}`
+                    : null
+            } : null
+        }));
+
+        return sendResponse(res, 200, true, "Product removed from cart successfully.", formattedItems);
     } catch (err) {
-        dbgr("Remove From Cart Error:", err.message);
-        return sendResponse(res, 500, false, "Something went wrong.");
+        console.error("Remove From Cart Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong.", err.message);
     }
 }
 
+async function mergeCartsAfterLogin(userId, sessionId) {
+    try {
+        if (!sessionId || !userId) return;
+
+        const guestCart = await CartModel.findOne({ sessionId }).populate('items.productId');
+        if (!guestCart || guestCart.items.length === 0) return;
+
+        let userCart = await CartModel.findOne({ userId }).populate('items.productId');
+
+        if (!userCart) {
+            // If user has no cart, assign the guest cart to the user
+            guestCart.userId = userId;
+            guestCart.sessionId = undefined;
+            await guestCart.save();
+
+            // Update UserModel reference
+            await UserModel.findByIdAndUpdate(
+                userId,
+                { $set: { cart: guestCart._id } },
+                { new: true }
+            );
+            return;
+        }
+
+        // Merge the items from guest cart to user cart
+        let hasChanges = false;
+
+        for (const guestItem of guestCart.items) {
+            if (!guestItem.productId) continue; // Skip invalid items
+
+            const product = await ProductModel.findById(guestItem.productId._id);
+            if (!product) continue; // Skip if product no longer exists
+
+            const existingItemIndex = userCart.items.findIndex(
+                item => item.productId &&
+                    item.productId._id.toString() === guestItem.productId._id.toString()
+            );
+
+            if (existingItemIndex !== -1) {
+                // Update quantity without exceeding stock
+                const newQuantity = Math.min(
+                    userCart.items[existingItemIndex].quantity + guestItem.quantity,
+                    product.stock
+                );
+                userCart.items[existingItemIndex].quantity = newQuantity;
+                hasChanges = true;
+            } else {
+                // Add new item
+                userCart.items.push({
+                    productId: guestItem.productId._id,
+                    quantity: Math.min(guestItem.quantity, product.stock)
+                });
+                hasChanges = true;
+            }
+        }
+
+        if (hasChanges) {
+            await userCart.save();
+
+            // Update UserModel reference
+            await UserModel.findByIdAndUpdate(
+                userId,
+                { $set: { cart: userCart._id } },
+                { new: true }
+            );
+        }
+
+        // Remove the guest cart
+        await CartModel.deleteOne({ _id: guestCart._id });
+    } catch (err) {
+        console.error("Merge Carts Error:", err);
+    }
+}
+
+async function clearCart(req, res) {
+    try {
+        const userId = req.user?.ID || null;
+        const sessionId = req.cookies.sessionId;
+
+        if (!userId && !sessionId) {
+            return sendResponse(res, 400, false, "No user or session found.");
+        }
+
+        // Find cart with proper query
+        const query = userId ? { userId } : { sessionId };
+        const cart = await CartModel.findOne(query);
+
+        if (!cart) {
+            return sendResponse(res, 200, true, "Cart is already empty.");
+        }
+
+        cart.items = [];
+        await cart.save();
+
+        // Update UserModel if logged in
+        if (userId) {
+            await UserModel.findByIdAndUpdate(
+                userId,
+                { $set: { cart: cart._id } },
+                { new: true }
+            );
+        }
+
+        return sendResponse(res, 200, true, "Cart cleared successfully.", []);
+    } catch (err) {
+        console.error("Clear Cart Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong.", err.message);
+    }
+}
 
 async function getUserOrders(req, res) {
     try {
         const orders = await OrderModel.find({ customer: req.user.ID }).populate('items.product');
-        return sendResponse(res, 200, true, "User orders fetched successfully.", orders);
+
+        // Format product images in Base64
+        const formattedOrders = orders.map(order => ({
+            ...order.toObject(),
+            items: order.items.map(item => ({
+                ...item.toObject(),
+                product: {
+                    ...item.product.toObject(),
+                    image: item.product.image?.data
+                        ? `data:${item.product.image.contentType};base64,${item.product.image.data.toString("base64")}`
+                        : null
+                }
+            }))
+        }));
+
+        return sendResponse(res, 200, true, "User orders fetched successfully.", formattedOrders);
     } catch (err) {
         dbgr("Get User Orders Error:", err.message);
         return sendResponse(res, 500, false, "Something went wrong.");
     }
 }
 
-
 async function placeOrder(req, res) {
     try {
-
         if (!req.user || !req.user.ID) {
             return sendResponse(res, 401, false, "Please login to place an order.");
         }
 
+        const { modeOfPayment, deliveryFee } = req.body;
+
+        if (!["Online", "Cash on Delivery"].includes(modeOfPayment)) {
+            return sendResponse(res, 400, false, "Invalid payment mode. Choose 'Online' or 'Cash on Delivery'.");
+        }
+
+        if (typeof deliveryFee !== "number" || deliveryFee < 0) {
+            return sendResponse(res, 400, false, "Invalid delivery fee.");
+        }
 
         const cart = await CartModel.findOne({ userId: req.user.ID }).populate('items.productId');
 
@@ -466,17 +739,27 @@ async function placeOrder(req, res) {
             });
         }
 
+        totalAmount += deliveryFee;
+
         const newOrder = new OrderModel({
             customer: req.user.ID,
             items: orderItems,
             totalAmount,
-            owner: orderItems[0].productId.owner,
-            orderDate: new Date()
+            owner: orderItems[0].product.owner,
+            orderDate: new Date(),
+            modeOfPayment,
+            orderStatus: "Pending"
         });
 
         await newOrder.save();
 
+        // ✅ Update the UserModel to include this order
+        await UserModel.findByIdAndUpdate(req.user.ID, {
+            $push: { orders: newOrder._id }, // Append order to user's orders array
+            $set: { cart: null } // Remove cart reference after order is placed
+        });
 
+        // ✅ Remove the cart after order is placed
         await CartModel.findOneAndDelete({ userId: req.user.ID });
 
         return sendResponse(res, 200, true, "Order placed successfully.", newOrder);
@@ -485,7 +768,6 @@ async function placeOrder(req, res) {
         return sendResponse(res, 500, false, "Something went wrong.");
     }
 }
-
 
 async function cancelOrder(req, res) {
     try {
@@ -506,6 +788,10 @@ async function cancelOrder(req, res) {
             return sendResponse(res, 403, false, "Unauthorized access.");
         }
 
+        if (order.orderStatus === "Cancelled") {
+            return sendResponse(res, 400, false, "Order is already cancelled.");
+        }
+
         for (let item of order.items) {
             const product = await ProductModel.findById(item.product);
             if (product) {
@@ -514,7 +800,8 @@ async function cancelOrder(req, res) {
             }
         }
 
-        await OrderModel.findByIdAndDelete(orderID);
+        order.orderStatus = "Cancelled";
+        await order.save();
 
         return sendResponse(res, 200, true, "Order cancelled successfully.");
     } catch (err) {
@@ -522,7 +809,6 @@ async function cancelOrder(req, res) {
         return sendResponse(res, 500, false, "Something went wrong.");
     }
 }
-
 
 async function getWishlist(req, res) {
     try {
@@ -534,13 +820,23 @@ async function getWishlist(req, res) {
 
         const wishlist = await wishModel.find({ customer: user._id }).populate("product");
 
-        return sendResponse(res, 200, true, "User wishlist fetched successfully.", wishlist);
+        // Format product images in Base64
+        const formattedWishlist = wishlist.map(item => ({
+            ...item.toObject(),
+            product: {
+                ...item.product.toObject(),
+                image: item.product.image?.data
+                    ? `data:${item.product.image.contentType};base64,${item.product.image.data.toString("base64")}`
+                    : null
+            }
+        }));
+
+        return sendResponse(res, 200, true, "User wishlist fetched successfully.", formattedWishlist);
     } catch (err) {
         dbgr("Get Wishlist Error:", err.message);
         return sendResponse(res, 500, false, "Something went wrong.");
     }
 }
-
 
 async function addToWishlist(req, res) {
     try {
@@ -604,6 +900,36 @@ async function removeFromWishlist(req, res) {
     }
 }
 
+async function searchUsers(req, res) {
+    try {
+        const query = req.query.q?.trim();
+
+        if (!query) {
+            return sendResponse(res, 400, false, "Query parameter is required");
+        }
+
+        const users = await UserModel.find({
+            fullName: { $regex: new RegExp(query, "i") }
+        });
+
+        // Format user profile pictures in Base64
+        const formattedUsers = users.map(user => {
+            let formattedUser = user.toObject();
+
+            if (user.picture && user.picture.data) {
+                formattedUser.picture = `data:${user.picture.contentType};base64,${user.picture.data.toString("base64")}`;
+            } else {
+                formattedUser.picture = null; // Set to null if no picture
+            }
+
+            return formattedUser;
+        });
+
+        sendResponse(res, 200, true, "User search results retrieved", formattedUsers);
+    } catch (error) {
+        sendResponse(res, 500, false, error.message);
+    }
+}
 
 module.exports = {
     loginLimiter,
@@ -624,5 +950,6 @@ module.exports = {
     getWishlist,
     addToWishlist,
     removeFromWishlist,
-    updateCartQuantity
+    updateCartQuantity,
+    searchUsers
 };

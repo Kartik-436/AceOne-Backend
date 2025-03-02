@@ -24,7 +24,28 @@ const dbgr = require('debug')('development:productController');
 // http://localhost:5000/products?category=shoes&minPrice=200&maxPrice=800&sort=price:desc
 
 
-// Get all products with sorting feature
+// Helper function to format product images as base64
+function formatProductImage(product) {
+    let formattedProduct = product;
+
+    // If it's a Mongoose document, convert to plain object
+    if (product.toObject) {
+        formattedProduct = product.toObject();
+    }
+
+    // Convert Buffer image data to base64 string
+    if (formattedProduct.image && formattedProduct.image.data) {
+        formattedProduct.image = `data:${formattedProduct.image.contentType};base64,${formattedProduct.image.data.toString("base64")}`;
+    }
+
+    return formattedProduct;
+}
+
+// Format multiple products
+function formatProductsWithImages(products) {
+    return products.map(product => formatProductImage(product));
+}
+
 async function getAllProducts(req, res) {
     try {
         const { sort, category, minPrice, maxPrice } = req.query;
@@ -56,7 +77,10 @@ async function getAllProducts(req, res) {
         // Fetch products with filtering and sorting
         const products = await ProductModel.find(filterOptions).sort(sortOptions);
 
-        sendResponse(res, 200, true, 'Products retrieved successfully', products);
+        // Format images as base64
+        const formattedProducts = formatProductsWithImages(products);
+
+        sendResponse(res, 200, true, 'Products retrieved successfully', formattedProducts);
     } catch (error) {
         sendResponse(res, 500, false, error.message);
     }
@@ -67,31 +91,19 @@ async function getProductById(req, res) {
     try {
         const { productId } = req.params;
         const product = await ProductModel.findById(productId);
+
         if (!product) {
             return sendResponse(res, 404, false, 'Product not found');
         }
-        sendResponse(res, 200, true, 'Product retrieved successfully', product);
+
+        // Format image as base64
+        const formattedProduct = formatProductImage(product);
+
+        sendResponse(res, 200, true, 'Product retrieved successfully', formattedProduct);
     } catch (error) {
         sendResponse(res, 500, false, error.message);
     }
 }
-
-// Get single product details
-// async function getProductByName(req, res) {
-//     try {
-//         const { productName } = req.params;  // Extract product name from request parameters
-//         const product = await ProductModel.findOne({ name: { $regex: new RegExp(productName, 'i') } });
-
-//         if (!product) {
-//             return sendResponse(res, 404, false, 'Product not found');
-//         }
-
-//         sendResponse(res, 200, true, 'Product retrieved successfully', product);
-//     } catch (error) {
-//         sendResponse(res, 500, false, error.message);
-//     }
-// }
-
 
 // Get best-selling products
 async function getBestSellingProducts(req, res) {
@@ -103,12 +115,28 @@ async function getBestSellingProducts(req, res) {
             { $limit: 12 } // Retrieve top 12 best-selling products
         ]);
 
-        sendResponse(res, 200, true, 'Best-selling products retrieved', products);
+        // For aggregation results, we need to handle image formatting slightly differently
+        const formattedProducts = products.map(product => {
+            if (product.image && product.image.data) {
+                // Convert Buffer to base64 string
+                // Note: With aggregation, data might be Binary data not Buffer
+                const imageData = product.image.data.buffer ?
+                    product.image.data.buffer.toString("base64") :
+                    product.image.data.toString("base64");
+
+                return {
+                    ...product,
+                    image: `data:${product.image.contentType};base64,${imageData}`
+                };
+            }
+            return product;
+        });
+
+        sendResponse(res, 200, true, 'Best-selling products retrieved', formattedProducts);
     } catch (error) {
         sendResponse(res, 500, false, error.message);
     }
 }
-
 
 // Get products with discounts
 async function getDiscountedProducts(req, res) {
@@ -120,12 +148,14 @@ async function getDiscountedProducts(req, res) {
             return sendResponse(res, 200, true, "No discounted products available", []);
         }
 
-        sendResponse(res, 200, true, 'Discounted products retrieved', products);
+        // Format images as base64
+        const formattedProducts = formatProductsWithImages(products);
+
+        sendResponse(res, 200, true, 'Discounted products retrieved', formattedProducts);
     } catch (error) {
         sendResponse(res, 500, false, error.message);
     }
 }
-
 
 // Search products
 async function searchProducts(req, res) {
@@ -140,10 +170,34 @@ async function searchProducts(req, res) {
             name: { $regex: new RegExp(query, "i") }
         });
 
-        sendResponse(res, 200, true, 'Search results retrieved', products);
+        // Format images as base64
+        const formattedProducts = formatProductsWithImages(products);
+
+        sendResponse(res, 200, true, 'Search results retrieved', formattedProducts);
     } catch (error) {
         sendResponse(res, 500, false, error.message);
     }
 }
+
+// Uncomment and update if needed
+/*
+async function getProductByName(req, res) {
+  try {
+    const { productName } = req.params;  // Extract product name from request parameters
+    const product = await ProductModel.findOne({ name: { $regex: new RegExp(productName, 'i') } });
+ 
+    if (!product) {
+      return sendResponse(res, 404, false, 'Product not found');
+    }
+    
+    // Format image as base64
+    const formattedProduct = formatProductImage(product);
+ 
+    sendResponse(res, 200, true, 'Product retrieved successfully', formattedProduct);
+  } catch (error) {
+    sendResponse(res, 500, false, error.message);
+  }
+}
+*/
 
 module.exports = { getAllProducts, getProductById, getBestSellingProducts, getDiscountedProducts, searchProducts };

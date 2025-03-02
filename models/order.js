@@ -20,7 +20,21 @@ const orderSchema = new mongoose.Schema({
     orderDate: {
         type: Date,
         default: Date.now
+    },
+
+    orderStatus: {
+        type: String,
+        enum: ["Pending", "Processing", "Shipped", "Out for Delivery", "Delivered", "Cancelled"],
+        default: "Pending"
+    },
+
+    modeOfPayment: {
+        type: String,
+        enum: ["Online", "Cash on Delivery"],
+        required: true
     }
+}, {
+    timestamps: true
 });
 
 const OrderModel = mongoose.model('Order', orderSchema);
