@@ -40,10 +40,6 @@ app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(timeoutHandler);
-// app.use(cors({
-//     origin: "http://localhost:5173",
-//     credentials: true
-// }));
 
 // Status flow
 const statusFlow = ["Pending", "Processing", "Shipped", "Out for Delivery", "Delivered"];
@@ -71,6 +67,12 @@ cron.schedule("0 0 * * *", async () => {
     }
 });
 
+const cors = require("cors");
+
+app.use(cors({
+    origin: "http://localhost:5173", // Allow frontend domain
+    credentials: true // Allow cookies and authorization headers
+}));
 
 // Custom Routes
 app.use('/owner', ownerRouter);
