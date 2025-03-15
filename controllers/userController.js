@@ -19,7 +19,6 @@ const loginLimiter = rateLimit({
     message: "Too many login attempts, please try again later."
 });
 
-
 async function registerUser(req, res) {
     try {
         const { fullName, email, password, contact, dateOfBirth } = req.body;
@@ -731,6 +730,12 @@ async function placeOrder(req, res) {
 
             totalAmount += (product.discount === 0 ? product.price : product.discountPrice) * item.quantity;
             product.stock -= item.quantity;
+
+            // ✅ Update product's customers array with the user ID
+            if (!product.customer.includes(req.user.ID)) {
+                product.customer.push(req.user.ID);
+            }
+
             await product.save();
 
             orderItems.push({
@@ -753,13 +758,13 @@ async function placeOrder(req, res) {
 
         await newOrder.save();
 
-        // ✅ Update the UserModel to include this order
+        // Update the UserModel to include this order
         await UserModel.findByIdAndUpdate(req.user.ID, {
             $push: { orders: newOrder._id }, // Append order to user's orders array
             $set: { cart: null } // Remove cart reference after order is placed
         });
 
-        // ✅ Remove the cart after order is placed
+        // Remove the cart after order is placed
         await CartModel.findOneAndDelete({ userId: req.user.ID });
 
         return sendResponse(res, 200, true, "Order placed successfully.", newOrder);
