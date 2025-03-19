@@ -6,12 +6,11 @@ const CartModel = require('../models/cart.js')
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
+const nodemailer = require("nodemailer")
 const sendResponse = require('../utils/Send-Response.js');
 require('dotenv').config();
 
-
 const dbgr = require('debug')('development:userController');
-
 
 const loginLimiter = rateLimit({
     windowMs: 12 * 60 * 1000,
@@ -19,29 +18,198 @@ const loginLimiter = rateLimit({
     message: "Too many login attempts, please try again later."
 });
 
+// Send verification email
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.MAIL,
+        pass: process.env.MAIL_PASS
+    }
+});
+
 async function registerUser(req, res) {
     try {
         const { fullName, email, password, contact, dateOfBirth } = req.body;
         const user = await UserModel.findOne({ email });
 
-        if (user !== undefined && user !== null) {
+        // Check if user exists and is verified
+        if (user && user.isVerified) {
             return sendResponse(res, 400, false, "User already exists with this email.");
         }
 
+        // Email validation with regex
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return sendResponse(res, 400, false, "Invalid email format.");
+        }
+
+        // Generate verification token (OTP)
+        const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
+        const verificationTokenExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        const newUser = new UserModel({
-            fullName,
-            email,
-            password: hashedPassword,
-            contact,
-            dateOfBirth: new Date(dateOfBirth),
+        // If user exists but not verified, update their information
+        if (user) {
+            user.fullName = fullName;
+            user.password = hashedPassword;
+            user.contact = contact;
+            user.dateOfBirth = new Date(dateOfBirth);
+            user.verificationToken = verificationToken;
+            user.verificationTokenExpires = verificationTokenExpires;
+            await user.save();
+        } else {
+            // Create new user
+            const newUser = new UserModel({
+                fullName,
+                email,
+                password: hashedPassword,
+                contact,
+                dateOfBirth: new Date(dateOfBirth),
+                verificationToken,
+                verificationTokenExpires,
+                isVerified: false
+            });
+            await newUser.save();
+        }
+
+        const mailOptions = {
+            from: process.env.MAIL,
+            to: email,
+            subject: 'Email Verification for Your Account',
+            html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Email Verification</title>
+                    <style>
+                        body {
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                            line-height: 1.6;
+                            color: #333333;
+                            margin: 0;
+                            padding: 0;
+                        }
+                        .container {
+                            max-width: 600px;
+                            margin: 0 auto;
+                            padding: 20px;
+                        }
+                        .header {
+                            background-color: #4A90E2;
+                            padding: 20px;
+                            text-align: center;
+                            color: white;
+                            border-radius: 5px 5px 0 0;
+                        }
+                        .content {
+                            background-color: #ffffff;
+                            padding: 30px;
+                            border-left: 1px solid #e6e6e6;
+                            border-right: 1px solid #e6e6e6;
+                        }
+                        .verification-code {
+                            font-size: 32px;
+                            font-weight: bold;
+                            text-align: center;
+                            letter-spacing: 5px;
+                            margin: 20px 0;
+                            padding: 15px;
+                            background-color: #f7f7f7;
+                            border-radius: 5px;
+                            color: #333333;
+                        }
+                        .expiry-notice {
+                            text-align: center;
+                            color: #777777;
+                            font-size: 14px;
+                            margin-top: 20px;
+                        }
+                        .footer {
+                            background-color: #f7f7f7;
+                            padding: 15px;
+                            text-align: center;
+                            font-size: 12px;
+                            color: #777777;
+                            border-radius: 0 0 5px 5px;
+                            border: 1px solid #e6e6e6;
+                        }
+                        .button {
+                            display: inline-block;
+                            background-color: #4A90E2;
+                            color: white;
+                            text-decoration: none;
+                            padding: 10px 20px;
+                            border-radius: 5px;
+                            margin-top: 15px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>Email Verification</h1>
+                        </div>
+                        <div class="content">
+                            <p>Hello,</p>
+                            <p>Thank you for registering with our e-commerce platform. To complete your registration, please use the verification code below:</p>
+                            
+                            <div class="verification-code">
+                                ${verificationToken}
+                            </div>
+                            
+                            <p>Please enter this code on the verification page to activate your account.</p>
+                            
+                            <p class="expiry-notice">This code will expire in <strong>10 minutes</strong>.</p>
+                            
+                            <p>If you did not request this verification code, please ignore this email.</p>
+                        </div>
+                        <div class="footer">
+                            <p>&copy; 2025 Aceone. All rights reserved.</p>
+                            <p>This is an automated message, please do not reply to this email.</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        return sendResponse(res, 201, true, "User registered successfully. Please check your email for verification code.", { email });
+    } catch (err) {
+        dbgr("Register User Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong.");
+    }
+}
+
+async function verifyEmail(req, res) {
+    try {
+        let { OTP_Email } = req.body;
+
+        let finalEmail = OTP_Email.email.email;
+        let otp = OTP_Email.otp;
+
+        const user = await UserModel.findOne({
+            email: finalEmail,
+            verificationToken: otp,
+            verificationTokenExpires: { $gt: Date.now() }
         });
 
-        await newUser.save();
+        if (!user) {
+            return sendResponse(res, 400, false, "Invalid or expired verification code.");
+        }
 
+        // Mark user as verified
+        user.isVerified = true;
+        user.verificationToken = undefined;
+        user.verificationTokenExpires = undefined;
+        await user.save();
+
+        // Generate JWT token after verification
         const token = jwt.sign(
-            { email: newUser.email, ID: newUser._id, role: "user" },
+            { email: user.email, ID: user._id, role: "user" },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRE }
         );
@@ -53,15 +221,148 @@ async function registerUser(req, res) {
             maxAge: 24 * 60 * 60 * 1000
         });
 
-        const userResponse = await UserModel.findById(newUser._id)
+        const userResponse = await UserModel.findById(user._id).select('-password -verificationToken -verificationTokenExpires');
 
-        return sendResponse(res, 201, true, "User registered successfully.", userResponse);
+        return sendResponse(res, 200, true, "Email verified successfully. You are now logged in.", userResponse);
     } catch (err) {
-        dbgr("Register User Error:", err.message);
-        return sendResponse(res, 500, false, "Something went wrong.");
+        dbgr("Verification Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong during verification.");
     }
 }
 
+async function resendVerificationOTP(req, res) {
+    try {
+        const { email } = req.body;
+
+        const user = await UserModel.findOne({ email });
+
+        if (!user) {
+            return sendResponse(res, 404, false, "User not found with this email.");
+        }
+
+        if (user.isVerified) {
+            return sendResponse(res, 400, false, "Email already verified. Please login.");
+        }
+
+        // Generate new verification token
+        const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
+        const verificationTokenExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        user.verificationToken = verificationToken;
+        user.verificationTokenExpires = verificationTokenExpires;
+        await user.save();
+
+        const mailOptions = {
+            from: process.env.MAIL,
+            to: email,
+            subject: 'Email Verification for Your Account',
+            html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Email Verification</title>
+                    <style>
+                        body {
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                            line-height: 1.6;
+                            color: #333333;
+                            margin: 0;
+                            padding: 0;
+                        }
+                        .container {
+                            max-width: 600px;
+                            margin: 0 auto;
+                            padding: 20px;
+                        }
+                        .header {
+                            background-color: #4A90E2;
+                            padding: 20px;
+                            text-align: center;
+                            color: white;
+                            border-radius: 5px 5px 0 0;
+                        }
+                        .content {
+                            background-color: #ffffff;
+                            padding: 30px;
+                            border-left: 1px solid #e6e6e6;
+                            border-right: 1px solid #e6e6e6;
+                        }
+                        .verification-code {
+                            font-size: 32px;
+                            font-weight: bold;
+                            text-align: center;
+                            letter-spacing: 5px;
+                            margin: 20px 0;
+                            padding: 15px;
+                            background-color: #f7f7f7;
+                            border-radius: 5px;
+                            color: #333333;
+                        }
+                        .expiry-notice {
+                            text-align: center;
+                            color: #777777;
+                            font-size: 14px;
+                            margin-top: 20px;
+                        }
+                        .footer {
+                            background-color: #f7f7f7;
+                            padding: 15px;
+                            text-align: center;
+                            font-size: 12px;
+                            color: #777777;
+                            border-radius: 0 0 5px 5px;
+                            border: 1px solid #e6e6e6;
+                        }
+                        .button {
+                            display: inline-block;
+                            background-color: #4A90E2;
+                            color: white;
+                            text-decoration: none;
+                            padding: 10px 20px;
+                            border-radius: 5px;
+                            margin-top: 15px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>Email Verification</h1>
+                        </div>
+                        <div class="content">
+                            <p>Hello,</p>
+                            <p>Thank you for registering with our e-commerce platform. To complete your registration, please use the verification code below:</p>
+                            
+                            <div class="verification-code">
+                                ${verificationToken}
+                            </div>
+                            
+                            <p>Please enter this code on the verification page to activate your account.</p>
+                            
+                            <p class="expiry-notice">This code will expire in <strong>10 minutes</strong>.</p>
+                            
+                            <p>If you did not request this verification code, please ignore this email.</p>
+                        </div>
+                        <div class="footer">
+                            <p>&copy; 2025 Aceone. All rights reserved.</p>
+                            <p>This is an automated message, please do not reply to this email.</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        return sendResponse(res, 200, true, "New verification code sent to your email.");
+    } catch (err) {
+        dbgr("Resend OTP Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong while resending verification code.");
+    }
+}
 
 async function loginUser(req, res) {
     try {
@@ -70,6 +371,10 @@ async function loginUser(req, res) {
 
         if (!user) {
             return sendResponse(res, 400, false, "User not found with this email.");
+        }
+
+        if (!user.isVerified) {
+            return sendResponse(res, 403, false, "Email not verified. Please verify your email first.");
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -91,7 +396,7 @@ async function loginUser(req, res) {
             maxAge: 24 * 60 * 60 * 1000
         });
 
-        const userResponse = await UserModel.findById(user._id).select('-password');
+        const userResponse = await UserModel.findById(user._id).select('-password -verificationToken -verificationTokenExpires');
 
         return sendResponse(res, 200, true, "User logged in successfully.", userResponse);
     } catch (err) {
@@ -99,7 +404,6 @@ async function loginUser(req, res) {
         return sendResponse(res, 500, false, "Something went wrong.");
     }
 }
-
 
 function logoutUser(req, res) {
     try {
@@ -111,7 +415,6 @@ function logoutUser(req, res) {
     }
 }
 
-
 async function forgotPassword(req, res) {
     try {
         const { email } = req.body;
@@ -121,16 +424,124 @@ async function forgotPassword(req, res) {
             return sendResponse(res, 400, false, "User not found with this email.");
         }
 
-        const token = jwt.sign(
-            { email: user.email, ID: user._id },
-            process.env.JWT_SECRET,
-            { expiresIn: '10m' }
-        );
+        if (!user.isVerified) {
+            return sendResponse(res, 403, false, "Email not verified. Please verify your email first.");
+        }
 
+        // Generate reset token (OTP)
+        const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
+        const resetTokenExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-        dbgr("Password Reset Token:", token);
+        user.verificationToken = resetToken;
+        user.verificationTokenExpires = resetTokenExpires;
+        await user.save();
 
-        return sendResponse(res, 200, true, "Password reset token sent to your email.");
+        const mailOptions = {
+            from: process.env.MAIL,
+            to: email,
+            subject: 'Password Reset for Your Account',
+            html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Email Verification</title>
+                <style>
+                    body {
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        line-height: 1.6;
+                        color: #333333;
+                        margin: 0;
+                        padding: 0;
+                    }
+                    .container {
+                        max-width: 600px;
+                        margin: 0 auto;
+                        padding: 20px;
+                    }
+                    .header {
+                        background-color: #4A90E2;
+                        padding: 20px;
+                        text-align: center;
+                        color: white;
+                        border-radius: 5px 5px 0 0;
+                    }
+                    .content {
+                        background-color: #ffffff;
+                        padding: 30px;
+                        border-left: 1px solid #e6e6e6;
+                        border-right: 1px solid #e6e6e6;
+                    }
+                    .verification-code {
+                        font-size: 32px;
+                        font-weight: bold;
+                        text-align: center;
+                        letter-spacing: 5px;
+                        margin: 20px 0;
+                        padding: 15px;
+                        background-color: #f7f7f7;
+                        border-radius: 5px;
+                        color: #333333;
+                    }
+                    .expiry-notice {
+                        text-align: center;
+                        color: #777777;
+                        font-size: 14px;
+                        margin-top: 20px;
+                    }
+                    .footer {
+                        background-color: #f7f7f7;
+                        padding: 15px;
+                        text-align: center;
+                        font-size: 12px;
+                        color: #777777;
+                        border-radius: 0 0 5px 5px;
+                        border: 1px solid #e6e6e6;
+                    }
+                    .button {
+                        display: inline-block;
+                        background-color: #4A90E2;
+                        color: white;
+                        text-decoration: none;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        margin-top: 15px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Email Verification</h1>
+                    </div>
+                    <div class="content">
+                        <p>Hello,</p>
+                        <p>Thank you for registering with our e-commerce platform. To change your password, please use the verification code below:</p>
+                        
+                        <div class="verification-code">
+                            ${resetToken}
+                        </div>
+                        
+                        <p>Please enter this code on the verification page to change your password.</p>
+                        
+                        <p class="expiry-notice">This code will expire in <strong>10 minutes</strong>.</p>
+                        
+                        <p>If you did not request this verification code, please ignore this email.</p>
+                    </div>
+                    <div class="footer">
+                        <p>&copy; 2025 Aceone. All rights reserved.</p>
+                        <p>This is an automated message, please do not reply to this email.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        return sendResponse(res, 200, true, "Password reset code sent to your email.");
     }
     catch (err) {
         dbgr("Forgot Password Error:", err.message);
@@ -138,37 +549,91 @@ async function forgotPassword(req, res) {
     }
 }
 
+async function verifyResetToken(req, res) {
+    try {
+        const { Email_Otp } = req.body;
+
+        const FinalEmail = Email_Otp.email;
+        const otp = Email_Otp.otp;
+
+        const user = await UserModel.findOne({
+            email: FinalEmail,
+            verificationToken: otp,
+            verificationTokenExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            return sendResponse(res, 400, false, "Invalid or expired reset code.");
+        }
+
+        // Generate temporary token for password reset
+        const token = jwt.sign(
+            { email: user.email, ID: user._id, purpose: "passwordReset" },
+            process.env.JWT_SECRET,
+            { expiresIn: '10m' }
+        );
+
+        res.cookie('resetToken', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 10 * 60 * 1000 // 10 minutes
+        });
+
+        return sendResponse(res, 200, true, "Reset code verified. You can now reset your password.");
+    } catch (err) {
+        dbgr("Verify Reset Token Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong during verification.");
+    }
+}
 
 async function resetPassword(req, res) {
     try {
-        const token = req.cookies.token;
-        const { oldPassword, newPassword } = req.body;
+        const token = req.cookies.resetToken;
+        const { newPass } = req.body;
+
+        const newPassword = newPass.password;
+
+        // Add validation for newPassword
+        if (!newPassword) {
+            return sendResponse(res, 400, false, "New password is required.");
+        }
+
+        if (!token) {
+            return sendResponse(res, 401, false, "Unauthorized. Please verify your reset code first.");
+        }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        if (decoded.purpose !== "passwordReset") {
+            return sendResponse(res, 401, false, "Invalid token purpose.");
+        }
+
         const user = await UserModel.findById(decoded.ID);
 
         if (!user) {
             return sendResponse(res, 400, false, "User not found.");
         }
 
-        const isOldPasswordValid = await bcrypt.compare(oldPassword, user.password);
+        // Clear verification token
+        user.verificationToken = undefined;
+        user.verificationTokenExpires = undefined;
 
-        if (!isOldPasswordValid) {
-            return sendResponse(res, 400, false, "Invalid old password.");
-        }
-
+        // Update password
         const hashedNewPassword = await bcrypt.hash(newPassword, 10);
         user.password = hashedNewPassword;
 
         await user.save();
 
-        return sendResponse(res, 200, true, "Password reset successfully.");
+        // Clear the reset token cookie
+        res.clearCookie('resetToken');
+
+        return sendResponse(res, 200, true, "Password reset successfully. Please login with your new password.");
     } catch (err) {
         dbgr("Reset Password Error:", err.message);
         return sendResponse(res, 500, false, "Something went wrong.");
     }
 }
-
 
 async function getUserProfile(req, res) {
     try {
@@ -178,7 +643,10 @@ async function getUserProfile(req, res) {
             return sendResponse(res, 400, false, "User not found.");
         }
 
-        // Check if picture exists and has valid data before converting to base64
+        if (user && !user.isVerified) {
+            return sendResponse(res, 400, false, "User found, but not verified");
+        }
+
         let base64Image = null;
         if (user.picture && user.picture.data) {
             base64Image = `data:${user.picture.contentType};base64,${user.picture.data.toString("base64")}`;
@@ -641,6 +1109,10 @@ async function clearCart(req, res) {
             return sendResponse(res, 400, false, "No user or session found.");
         }
 
+        if (user && !user.isVerified) {
+            return sendResponse(res, 400, false, "User found, but not verified");
+        }
+
         // Find cart with proper query
         const query = userId ? { userId } : { sessionId };
         const cart = await CartModel.findOne(query);
@@ -924,7 +1396,7 @@ async function searchUsers(req, res) {
             if (user.picture && user.picture.data) {
                 formattedUser.picture = `data:${user.picture.contentType};base64,${user.picture.data.toString("base64")}`;
             } else {
-                formattedUser.picture = null; // Set to null if no picture
+                formattedUser.picture = null;
             }
 
             return formattedUser;
@@ -956,5 +1428,9 @@ module.exports = {
     addToWishlist,
     removeFromWishlist,
     updateCartQuantity,
-    searchUsers
+    searchUsers,
+    verifyEmail,
+    verifyResetToken,
+    resendVerificationOTP,
+    clearCart
 };

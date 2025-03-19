@@ -13,6 +13,16 @@ const userSchema = new mongoose.Schema({
     password: {
         type: String,
     },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
+    verificationToken: {
+        type: String
+    },
+    verificationTokenExpires: {
+        type: Date
+    },
     cart: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Product'

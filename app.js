@@ -79,12 +79,6 @@ app.use('/owner', ownerRouter);
 app.use('/user', userRouter);
 app.use('/product', productRouter);
 
-app.use(express.static('dist'));
-
-app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
-});
-
 // Home Route
 app.get('/', LogProfileIfCookiePresent, (req, res) => {
     sendResponse(res, 200, true, "Showcase of AceOne E-Commerce");
