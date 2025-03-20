@@ -1109,10 +1109,6 @@ async function clearCart(req, res) {
             return sendResponse(res, 400, false, "No user or session found.");
         }
 
-        if (user && !user.isVerified) {
-            return sendResponse(res, 400, false, "User found, but not verified");
-        }
-
         // Find cart with proper query
         const query = userId ? { userId } : { sessionId };
         const cart = await CartModel.findOne(query);
