@@ -802,8 +802,9 @@ async function addToCart(req, res) {
             sessionId = Math.random().toString(36).substring(2);
             res.cookie("sessionId", sessionId, {
                 httpOnly: true,
-                maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-                sameSite: "None"
+                secure: true, // Must be true when sameSite is None
+                sameSite: "None",
+                maxAge: 24 * 60 * 60 * 1000
             });
         }
 
