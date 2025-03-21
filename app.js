@@ -69,10 +69,8 @@ cron.schedule("0 0 * * *", async () => {
 
 const cors = require("cors");
 
-app.use(cors({
-    origin: "http://localhost:5173", // Allow frontend domain
-    credentials: true // Allow cookies and authorization headers
-}));
+// Setting Cors
+app.use(cors());
 
 // Custom Routes
 app.use('/owner', ownerRouter);
