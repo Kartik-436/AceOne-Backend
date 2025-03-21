@@ -77,6 +77,8 @@ app.use(
     })
 );
 
+app.set("trust proxy", 1);
+
 // Custom Routes
 app.use('/owner', ownerRouter);
 app.use('/user', userRouter);
