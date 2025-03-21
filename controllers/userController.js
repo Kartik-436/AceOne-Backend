@@ -217,7 +217,7 @@ async function verifyEmail(req, res) {
         res.cookie('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: "None",
             maxAge: 24 * 60 * 60 * 1000
         });
 
@@ -392,7 +392,7 @@ async function loginUser(req, res) {
         res.cookie('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: "None",
             maxAge: 24 * 60 * 60 * 1000
         });
 
@@ -576,7 +576,7 @@ async function verifyResetToken(req, res) {
         res.cookie('resetToken', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: "None",
             maxAge: 10 * 60 * 1000 // 10 minutes
         });
 
@@ -803,7 +803,7 @@ async function addToCart(req, res) {
             res.cookie("sessionId", sessionId, {
                 httpOnly: true,
                 maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-                sameSite: 'strict'
+                sameSite: "None"
             });
         }
 
