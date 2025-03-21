@@ -70,7 +70,12 @@ cron.schedule("0 0 * * *", async () => {
 const cors = require("cors");
 
 // Setting Cors
-app.use(cors());
+app.use(
+    cors({
+        origin: "https://aceone.vercel.app",
+        credentials: true,
+    })
+);
 
 // Custom Routes
 app.use('/owner', ownerRouter);
