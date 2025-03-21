@@ -407,7 +407,16 @@ async function loginUser(req, res) {
 
 function logoutUser(req, res) {
     try {
-        res.clearCookie('token');
+        res.clearCookie('token', {
+            httpOnly: true,
+            secure: true,
+            sameSite: "None",
+        });
+
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+
         return sendResponse(res, 200, true, "User logged out successfully.");
     } catch (err) {
         dbgr("Logout User Error:", err.message);
