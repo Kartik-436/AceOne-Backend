@@ -91,7 +91,17 @@ async function loginOwner(req, res) {
 }
 
 async function logOutOwner(req, res) {
-    res.clearCookie("token");
+    res.clearCookie("token", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "None",
+    });
+
+    // Add cache control headers
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     sendResponse(res, 200, true, "Owner Logged Out");
 }
 
