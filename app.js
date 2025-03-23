@@ -4,6 +4,7 @@
 const { ownerRouter } = require('./routes/ownerRouter.js');
 const { userRouter } = require('./routes/userRouter.js');
 const { productRouter } = require('./routes/productRouter.js');
+const { invoiceRouter } = require('./routes/invoiceRouter.js');
 
 // Required Modules
 const express = require('express');
@@ -83,6 +84,7 @@ app.set("trust proxy", 1);
 app.use('/owner', ownerRouter);
 app.use('/user', userRouter);
 app.use('/product', productRouter);
+app.use('/inv', invoiceRouter);
 
 // Home Route
 app.get('/', LogProfileIfCookiePresent, (req, res) => {

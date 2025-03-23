@@ -3,11 +3,19 @@ const UserModel = require('../models/user.js');
 const OrderModel = require('../models/order.js');
 const wishModel = require('../models/wishlist.js');
 const CartModel = require('../models/cart.js')
+const PaymentModel = require("../models/payment.js")
+const InvoiceModel = require("../models/invoice.js")
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
 const nodemailer = require("nodemailer")
 const sendResponse = require('../utils/Send-Response.js');
+const {
+    createOrder: createRazorpayOrder,
+    capturePayment,
+    processRefund
+} = require('../services/PaymentService.jsx');
+const { generateInvoice } = require('../utils/Generate-Invoice.js');
 require('dotenv').config();
 
 const dbgr = require('debug')('development:userController');
@@ -1148,7 +1156,9 @@ async function clearCart(req, res) {
 
 async function getUserOrders(req, res) {
     try {
-        const orders = await OrderModel.find({ customer: req.user.ID }).populate('items.product');
+        const orders = await OrderModel.find({ customer: req.user.ID })
+            .populate('items.product')
+            .populate('payment', 'status paymentId orderId method');
 
         // Format product images in Base64
         const formattedOrders = orders.map(order => ({
@@ -1207,23 +1217,17 @@ async function placeOrder(req, res) {
             }
 
             totalAmount += (product.discount === 0 ? product.price : product.discountPrice) * item.quantity;
-            product.stock -= item.quantity;
-
-            // ✅ Update product's customers array with the user ID
-            if (!product.customer.includes(req.user.ID)) {
-                product.customer.push(req.user.ID);
-            }
-
-            await product.save();
 
             orderItems.push({
                 product: product._id,
-                quantity: item.quantity
+                quantity: item.quantity,
+                price: product.discount === 0 ? product.price : product.discountPrice
             });
         }
 
         totalAmount += deliveryFee;
 
+        // Create a new order with initial status
         const newOrder = new OrderModel({
             customer: req.user.ID,
             items: orderItems,
@@ -1231,10 +1235,67 @@ async function placeOrder(req, res) {
             owner: orderItems[0].product.owner,
             orderDate: new Date(),
             modeOfPayment,
-            orderStatus: "Pending"
+            orderStatus: modeOfPayment === "Cash on Delivery" ? "Pending" : "Awaiting Payment",
+            deliveryFee
         });
 
         await newOrder.save();
+
+        // Create payment record if online payment
+        let paymentResponse = null;
+
+        if (modeOfPayment === "Online") {
+            // Create Razorpay order
+            const razorpayOrderData = {
+                amount: totalAmount,
+                currency: 'INR',
+                orderId: newOrder._id.toString(),
+                customerId: req.user.ID,
+                description: `Payment for order #${newOrder._id}`
+            };
+
+            const razorpayOrder = await createRazorpayOrder(razorpayOrderData);
+
+            // Create payment record in DB
+            const paymentRecord = new PaymentModel({
+                order: newOrder._id,
+                customer: req.user.ID,
+                amount: totalAmount,
+                currency: 'INR',
+                razorpayOrderId: razorpayOrder.orderId,
+                status: 'created'
+            });
+
+            await paymentRecord.save();
+
+            // Associate payment with order
+            newOrder.payment = paymentRecord._id;
+            await newOrder.save();
+
+            // Add razorpay order details to response
+            paymentResponse = {
+                razorpayOrderId: razorpayOrder.orderId,
+                amount: razorpayOrder.amount,
+                currency: razorpayOrder.currency,
+                status: razorpayOrder.status
+            };
+        } else {
+            // For Cash on Delivery, update product stock immediately
+            for (let item of cart.items) {
+                const product = await ProductModel.findById(item.productId);
+                if (product) {
+                    product.stock -= item.quantity;
+                    // Update product's customers array with the user ID
+                    if (!product.customer.includes(req.user.ID)) {
+                        product.customer.push(req.user.ID);
+                    }
+                    await product.save();
+                }
+            }
+
+            // Generate invoice for COD orders
+            await generateInvoice(newOrder._id);
+        }
 
         // Update the UserModel to include this order
         await UserModel.findByIdAndUpdate(req.user.ID, {
@@ -1245,10 +1306,95 @@ async function placeOrder(req, res) {
         // Remove the cart after order is placed
         await CartModel.findOneAndDelete({ userId: req.user.ID });
 
-        return sendResponse(res, 200, true, "Order placed successfully.", newOrder);
+        const responseData = {
+            order: newOrder,
+            payment: paymentResponse
+        };
+
+        return sendResponse(res, 200, true, "Order placed successfully.", responseData);
     } catch (err) {
         dbgr("Place Order Error:", err.message);
         return sendResponse(res, 500, false, "Something went wrong.");
+    }
+}
+
+async function verifyPayment(req, res) {
+    try {
+        const {
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature,
+            orderId
+        } = req.body;
+
+        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !orderId) {
+            return sendResponse(res, 400, false, "Missing payment verification parameters.");
+        }
+
+        // Verify and capture payment
+        const paymentData = {
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature
+        };
+
+        const capturedPayment = await capturePayment(paymentData);
+
+        // Update payment record
+        const payment = await PaymentModel.findOneAndUpdate(
+            { razorpayOrderId: razorpay_order_id },
+            {
+                paymentId: razorpay_payment_id,
+                status: capturedPayment.status,
+                method: capturedPayment.method,
+                updatedAt: new Date()
+            },
+            { new: true }
+        );
+
+        if (!payment) {
+            return sendResponse(res, 404, false, "Payment record not found.");
+        }
+
+        // Update order status
+        const order = await OrderModel.findById(orderId);
+
+        if (!order) {
+            return sendResponse(res, 404, false, "Order not found.");
+        }
+
+        // Update product stock only after successful payment
+        for (let item of order.items) {
+            const product = await ProductModel.findById(item.product);
+            if (product) {
+                product.stock -= item.quantity;
+                // Update product's customers array with the user ID
+                if (!product.customer.includes(order.customer)) {
+                    product.customer.push(order.customer);
+                }
+                await product.save();
+            }
+        }
+
+        // Update order status based on payment status
+        if (capturedPayment.status === 'captured') {
+            order.orderStatus = 'Confirmed';
+
+            // Generate invoice after successful payment
+            await generateInvoice(order._id);
+        } else {
+            order.orderStatus = 'Payment Failed';
+        }
+
+        await order.save();
+
+        return sendResponse(res, 200, true, "Payment verified successfully.", {
+            order,
+            payment: capturedPayment
+        });
+    } catch (err) {
+        dbgr("Payment Verification Error:", err.message);
+        return sendResponse(res, 500, false, err.message || "Payment verification failed.");
     }
 }
 
@@ -1261,7 +1407,7 @@ async function cancelOrder(req, res) {
             return sendResponse(res, 400, false, "User not found.");
         }
 
-        const order = await OrderModel.findById(orderID);
+        const order = await OrderModel.findById(orderID).populate('payment');
 
         if (!order) {
             return sendResponse(res, 400, false, "Order not found.");
@@ -1275,6 +1421,38 @@ async function cancelOrder(req, res) {
             return sendResponse(res, 400, false, "Order is already cancelled.");
         }
 
+        // Check if order can be cancelled
+        const nonCancellableStatuses = ["Delivered", "Shipped"];
+        if (nonCancellableStatuses.includes(order.orderStatus)) {
+            return sendResponse(res, 400, false, `Cannot cancel order in ${order.orderStatus} status.`);
+        }
+
+        // Process refund for online payments
+        let refundResult = null;
+        if (order.modeOfPayment === "Online" && order.payment &&
+            order.payment.status === "captured" && order.payment.paymentId) {
+
+            const refundData = {
+                paymentId: order.payment.paymentId,
+                amount: order.totalAmount,
+                reason: "Order cancelled by customer",
+                metadata: {
+                    orderId: order._id.toString(),
+                    customerId: user._id.toString()
+                }
+            };
+
+            refundResult = await processRefund(refundData);
+
+            // Update payment record with refund info
+            await PaymentModel.findByIdAndUpdate(order.payment._id, {
+                refundId: refundResult.refundId,
+                refundStatus: refundResult.status,
+                refundedAt: new Date()
+            });
+        }
+
+        // Return stock to products
         for (let item of order.items) {
             const product = await ProductModel.findById(item.product);
             if (product) {
@@ -1284,12 +1462,19 @@ async function cancelOrder(req, res) {
         }
 
         order.orderStatus = "Cancelled";
+        order.cancelledAt = new Date();
+        order.cancellationReason = req.body.reason || "Cancelled by customer";
         await order.save();
 
-        return sendResponse(res, 200, true, "Order cancelled successfully.");
+        const responseData = {
+            order,
+            refund: refundResult
+        };
+
+        return sendResponse(res, 200, true, "Order cancelled successfully.", responseData);
     } catch (err) {
         dbgr("Cancel Order Error:", err.message);
-        return sendResponse(res, 500, false, "Something went wrong.");
+        return sendResponse(res, 500, false, err.message || "Something went wrong.");
     }
 }
 
@@ -1429,6 +1614,7 @@ module.exports = {
     removeFromCart,
     getUserOrders,
     placeOrder,
+    verifyPayment,
     cancelOrder,
     getWishlist,
     addToWishlist,

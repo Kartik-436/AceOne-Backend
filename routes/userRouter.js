@@ -21,6 +21,7 @@ const {
     removeFromCart,
     getUserOrders,
     placeOrder,
+    verifyPayment,
     cancelOrder,
     getWishlist,
     addToWishlist,
@@ -65,6 +66,7 @@ router.put('/cart/update', authenticateUser, updateCartQuantity);
 // Order Routes
 router.get('/orders', authenticateUser, getUserOrders);
 router.post('/order', authenticateUser, placeOrder);
+router.post('/order/verify-payment', authenticateUser, verifyPayment);
 router.post('/order/cancel', authenticateUser, cancelOrder);
 
 // Wishlist Routes
