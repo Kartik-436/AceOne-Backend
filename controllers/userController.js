@@ -1226,15 +1226,16 @@ async function placeOrder(req, res) {
         }
 
         totalAmount += deliveryFee;
+        const totalAmountInPaise = Math.round(totalAmount * 100); // Convert to paise (for Razorpay)
 
-        const firstProduct = cart.items[0].productId;  // Original product object
-        const ownerId = firstProduct.owner;  // Extract owner
+        const firstProduct = cart.items[0].productId;
+        const ownerId = firstProduct.owner;
 
         const newOrder = new OrderModel({
             customer: req.user.ID,
             items: orderItems,
             totalAmount,
-            owner: ownerId, // Assign correct owner
+            owner: ownerId,
             orderDate: new Date(),
             modeOfPayment,
             orderStatus: modeOfPayment === "Cash on Delivery" ? "Pending" : "Awaiting Payment",
@@ -1243,44 +1244,47 @@ async function placeOrder(req, res) {
 
         await newOrder.save();
 
-        // Create payment record if online payment
         let paymentResponse = null;
 
         if (modeOfPayment === "Online") {
-            // Create Razorpay order
-            const razorpayOrderData = {
-                amount: totalAmount,
-                currency: 'INR',
-                orderId: newOrder._id.toString(),
-                customerId: req.user.ID,
-                description: `Payment for order #${newOrder._id}`
-            };
+            try {
+                // Create Razorpay order
+                const razorpayOrderData = {
+                    amount: totalAmountInPaise, // Ensure amount is in paise
+                    currency: 'INR',
+                    receipt: newOrder._id.toString(),
+                    customerId: req.user.ID,
+                    description: `Payment for order #${newOrder._id}`
+                };
 
-            const razorpayOrder = await createRazorpayOrder(razorpayOrderData);
+                const razorpayOrder = await createRazorpayOrder(razorpayOrderData);
 
-            // Create payment record in DB
-            const paymentRecord = new PaymentModel({
-                order: newOrder._id,
-                customer: req.user.ID,
-                amount: totalAmount,
-                currency: 'INR',
-                razorpayOrderId: razorpayOrder.orderId,
-                status: 'created'
-            });
+                // Create payment record in DB
+                const paymentRecord = new PaymentModel({
+                    order: newOrder._id,
+                    customer: req.user.ID,
+                    amount: totalAmount,
+                    currency: 'INR',
+                    razorpayOrderId: razorpayOrder.id,
+                    status: 'created'
+                });
 
-            await paymentRecord.save();
+                await paymentRecord.save();
 
-            // Associate payment with order
-            newOrder.payment = paymentRecord._id;
-            await newOrder.save();
+                // Associate payment with order
+                newOrder.payment = paymentRecord._id;
+                await newOrder.save();
 
-            // Add razorpay order details to response
-            paymentResponse = {
-                razorpayOrderId: razorpayOrder.orderId,
-                amount: razorpayOrder.amount,
-                currency: razorpayOrder.currency,
-                status: razorpayOrder.status
-            };
+                paymentResponse = {
+                    razorpayOrderId: razorpayOrder.id,
+                    amount: razorpayOrder.amount,
+                    currency: razorpayOrder.currency,
+                    status: razorpayOrder.status
+                };
+            } catch (razorpayErr) {
+                console.error("Razorpay Order Creation Failed:", razorpayErr);
+                return sendResponse(res, 500, false, "Payment processing failed. Try again.");
+            }
         } else {
             // For Cash on Delivery, update product stock immediately
             for (let item of cart.items) {
@@ -1301,8 +1305,12 @@ async function placeOrder(req, res) {
                 console.error("Invoice Generation Error:", invoiceErr);
             }
         }
-        console.log("UserModel:", UserModel);
 
+        // Ensure User Exists Before Updating
+        const userExists = await UserModel.findById(req.user.ID);
+        if (!userExists) {
+            return sendResponse(res, 400, false, "User not found.");
+        }
 
         console.log("Before UserModel.findByIdAndUpdate");
         await UserModel.findByIdAndUpdate(req.user.ID, {
@@ -1310,7 +1318,6 @@ async function placeOrder(req, res) {
             $set: { cart: null }
         });
         console.log("After UserModel.findByIdAndUpdate");
-
 
         // Remove the cart after order is placed
         await CartModel.findOneAndDelete({ userId: req.user.ID });
@@ -1322,8 +1329,8 @@ async function placeOrder(req, res) {
 
         return sendResponse(res, 200, true, "Order placed successfully.", responseData);
     } catch (err) {
-        dbgr("Place Order Error:", err.message);
-        return sendResponse(res, 500, false, err.message + "Something went wrong.");
+        console.error("Place Order Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong: " + err.message);
     }
 }
 
