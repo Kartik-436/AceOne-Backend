@@ -1306,18 +1306,15 @@ async function placeOrder(req, res) {
             }
         }
 
-        // Ensure User Exists Before Updating
         const userExists = await UserModel.findById(req.user.ID);
         if (!userExists) {
             return sendResponse(res, 400, false, "User not found.");
         }
 
-        console.log("Before UserModel.findByIdAndUpdate");
         await UserModel.findByIdAndUpdate(req.user.ID, {
             $push: { orders: newOrder._id },
             $set: { cart: null }
         });
-        console.log("After UserModel.findByIdAndUpdate");
 
         // Remove the cart after order is placed
         await CartModel.findOneAndDelete({ userId: req.user.ID });
