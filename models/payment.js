@@ -1,3 +1,5 @@
+const mongoose = require('mongoose');
+
 const PaymentSchema = new mongoose.Schema({
     order: {
         type: mongoose.Schema.Types.ObjectId,
