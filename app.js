@@ -5,6 +5,7 @@ const { ownerRouter } = require('./routes/ownerRouter.js');
 const { userRouter } = require('./routes/userRouter.js');
 const { productRouter } = require('./routes/productRouter.js');
 const { invoiceRouter } = require('./routes/invoiceRouter.js');
+const { webhookRouter } = require('./routes/webhookRouter.js');
 
 // Required Modules
 const express = require('express');
@@ -103,6 +104,7 @@ app.use('/owner', ownerRouter);
 app.use('/user', userRouter);
 app.use('/product', productRouter);
 app.use('/inv', invoiceRouter);
+app.use('/webhooks', webhookRouter);
 
 // Home Route
 app.get('/', LogProfileIfCookiePresent, (req, res) => {
