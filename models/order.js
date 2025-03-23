@@ -31,7 +31,7 @@ const OrderSchema = mongoose.Schema({
     },
     owner: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        ref: 'Owner',
         required: true
     },
     orderDate: {
