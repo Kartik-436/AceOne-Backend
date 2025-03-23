@@ -1,14 +1,18 @@
+const ProductModel = require('../models/product.js');
+const UserModel = require('../models/user.js');
+const OrderModel = require('../models/order.js');
+const wishModel = require('../models/wishlist.js');
+const CartModel = require('../models/cart.js')
+const PaymentModel = require("../models/payment.js")
+
+const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
+const { Readable } = require('stream');
+
+const InvoiceModel = require('../models/invoice');
+
 async function generateInvoice(order) {
-    // Import required modules
-    const PDFDocument = require('pdfkit');
-    const fs = require('fs');
-    const path = require('path');
-    const { Readable } = require('stream');
-
-    // Import the Invoice model 
-    // (Make sure you've created this model as shown above)
-    const InvoiceModel = require('../models/invoice');
-
     // Create a unique invoice number
     const invoiceNumber = `INV-${order._id.toString().substring(0, 8)}-${Date.now()}`;
 
