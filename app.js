@@ -70,8 +70,6 @@ cron.schedule("0 0 * * *", async () => {
 
 // Run every minute
 cron.schedule('* * * * *', async () => {
-    console.log('Running cron job to clean up expired orders...');
-
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
     try {
