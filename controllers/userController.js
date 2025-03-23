@@ -1227,12 +1227,14 @@ async function placeOrder(req, res) {
 
         totalAmount += deliveryFee;
 
-        // Create a new order with initial status
+        const firstProduct = cart.items[0].productId;  // Original product object
+        const ownerId = firstProduct.owner;  // Extract owner
+
         const newOrder = new OrderModel({
             customer: req.user.ID,
             items: orderItems,
             totalAmount,
-            owner: orderItems[0].product.owner,
+            owner: ownerId, // Assign correct owner
             orderDate: new Date(),
             modeOfPayment,
             orderStatus: modeOfPayment === "Cash on Delivery" ? "Pending" : "Awaiting Payment",
@@ -1285,7 +1287,7 @@ async function placeOrder(req, res) {
                 const product = await ProductModel.findById(item.productId);
                 if (product) {
                     product.stock -= item.quantity;
-                    // Update product's customers array with the user ID
+
                     if (!product.customer.includes(req.user.ID)) {
                         product.customer.push(req.user.ID);
                     }
@@ -1293,11 +1295,9 @@ async function placeOrder(req, res) {
                 }
             }
 
-            // Generate invoice for COD orders
             await generateInvoice(newOrder._id);
         }
 
-        // Update the UserModel to include this order
         await UserModel.findByIdAndUpdate(req.user.ID, {
             $push: { orders: newOrder._id }, // Append order to user's orders array
             $set: { cart: null } // Remove cart reference after order is placed
