@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { verifyWebhookSignature, processWebhookEvent } = require('../services/PaymentService');
+const { verifyWebhookSignature, processWebhookEvent } = require('../services/PaymentService.jsx');
 const OrderModel = require('../models/OrderModel');
 const ProductModel = require('../models/ProductModel');
 const PaymentModel = require('../models/PaymentModel');
@@ -11,7 +11,6 @@ router.post('/razorpay', async (req, res) => {
     try {
         const signature = req.headers['x-razorpay-signature'];
         const requestBody = JSON.stringify(req.body);
-
 
         if (!signature || !verifyWebhookSignature(requestBody, signature)) {
             dbgr("Webhook Signature Verification Failed");
@@ -50,6 +49,8 @@ router.post('/razorpay', async (req, res) => {
         res.status(200).json({ success: false, message: "Webhook received but processing failed" });
     }
 });
+
+module.exports.webhookRouter = router;
 
 /**
  * Handle payment.authorized event
@@ -216,5 +217,3 @@ async function handleRefundProcessed(eventData) {
         throw err;
     }
 }
-
-module.exports.webhookRouter = router;
