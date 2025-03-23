@@ -1226,7 +1226,6 @@ async function placeOrder(req, res) {
         }
 
         totalAmount += deliveryFee;
-        const totalAmountInPaise = Math.round(totalAmount * 100); // Convert to paise (for Razorpay)
 
         const firstProduct = cart.items[0].productId;
         const ownerId = firstProduct.owner;
@@ -1250,7 +1249,7 @@ async function placeOrder(req, res) {
             try {
                 // Create Razorpay order
                 const razorpayOrderData = {
-                    amount: totalAmountInPaise, // Ensure amount is in paise
+                    amount: totalAmount,
                     currency: 'INR',
                     receipt: newOrder._id.toString(),
                     customerId: req.user.ID,
