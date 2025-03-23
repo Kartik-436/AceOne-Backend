@@ -1264,7 +1264,7 @@ async function placeOrder(req, res) {
                     customer: req.user.ID,
                     amount: totalAmount,
                     currency: 'INR',
-                    razorpayOrderId: razorpayOrder.id,
+                    razorpayOrderId: razorpayOrder.orderId,
                     status: 'created'
                 });
 
