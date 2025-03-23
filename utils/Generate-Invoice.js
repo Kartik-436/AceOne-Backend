@@ -236,7 +236,7 @@ async function generateInvoice(order) {
 
                     // Return the URL to access the invoice
                     // This URL will point to an endpoint that retrieves and serves the PDF from MongoDB
-                    const invoiceUrl = `/api/invoices/${invoice._id}`;
+                    const invoiceUrl = `https://aceone-backend-wcgq.onrender.com/inv/invoices/${invoice._id}`;
 
                     resolve(invoiceUrl);
                 } catch (error) {
