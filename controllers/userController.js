@@ -1177,7 +1177,7 @@ async function getUserOrders(req, res) {
         return sendResponse(res, 200, true, "User orders fetched successfully.", formattedOrders);
     } catch (err) {
         dbgr("Get User Orders Error:", err.message);
-        return sendResponse(res, 500, false, "Something went wrong.");
+        return sendResponse(res, 500, false, err.message + "Something went wrong.");
     }
 }
 
@@ -1314,7 +1314,7 @@ async function placeOrder(req, res) {
         return sendResponse(res, 200, true, "Order placed successfully.", responseData);
     } catch (err) {
         dbgr("Place Order Error:", err.message);
-        return sendResponse(res, 500, false, "Something went wrong.");
+        return sendResponse(res, 500, false, err.message + "Something went wrong.");
     }
 }
 
@@ -1394,7 +1394,7 @@ async function verifyPayment(req, res) {
         });
     } catch (err) {
         dbgr("Payment Verification Error:", err.message);
-        return sendResponse(res, 500, false, err.message || "Payment verification failed.");
+        return sendResponse(res, 500, false, err.message + "Payment verification failed.");
     }
 }
 
@@ -1474,7 +1474,7 @@ async function cancelOrder(req, res) {
         return sendResponse(res, 200, true, "Order cancelled successfully.", responseData);
     } catch (err) {
         dbgr("Cancel Order Error:", err.message);
-        return sendResponse(res, 500, false, err.message || "Something went wrong.");
+        return sendResponse(res, 500, false, err.message + "Something went wrong.");
     }
 }
 
