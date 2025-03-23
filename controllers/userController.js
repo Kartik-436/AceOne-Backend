@@ -1295,13 +1295,22 @@ async function placeOrder(req, res) {
                 }
             }
 
-            await generateInvoice(newOrder._id);
+            try {
+                await generateInvoice(newOrder._id);
+            } catch (invoiceErr) {
+                console.error("Invoice Generation Error:", invoiceErr);
+            }
         }
+        console.log("UserModel:", UserModel);
 
+
+        console.log("Before UserModel.findByIdAndUpdate");
         await UserModel.findByIdAndUpdate(req.user.ID, {
-            $push: { orders: newOrder._id }, // Append order to user's orders array
-            $set: { cart: null } // Remove cart reference after order is placed
+            $push: { orders: newOrder._id },
+            $set: { cart: null }
         });
+        console.log("After UserModel.findByIdAndUpdate");
+
 
         // Remove the cart after order is placed
         await CartModel.findOneAndDelete({ userId: req.user.ID });
