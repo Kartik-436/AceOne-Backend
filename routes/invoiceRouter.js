@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const InvoiceModel = require('../models/invoice');
 const OrderModel = require('../models/order');
-const authenticateUser = require('../middlewares/Login-Checker');
+const { authenticateUser } = require('../middlewares/Login-Checker');
 
 router.get('/invoices/:id', authenticateUser, async (req, res) => {
     try {
