@@ -4,7 +4,7 @@ const OrderModel = require('../models/order.js');
 const InvoiceModel = require('../models/invoice.js');
 const PDFDocument = require('pdfkit');
 
-async function generateInvoice(Order) {
+async function generateInvoice(order) {
     try {
         if (!order || !order._id) {
             throw new Error('Invalid order data received');
