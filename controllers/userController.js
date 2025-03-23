@@ -1323,7 +1323,6 @@ async function placeOrder(req, res) {
             payment: paymentResponse
         };
 
-        console.log("Payment response being sent:", paymentResponse);
         return sendResponse(res, 200, true, "Order placed successfully.", responseData);
     } catch (err) {
         console.error("Place Order Error:", err.message);

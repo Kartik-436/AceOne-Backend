@@ -10,8 +10,6 @@ async function generateInvoice(order) {
             throw new Error('Invalid order data received');
         }
 
-        console.log("Generating invoice for Order ID:", order._id);
-
         // Validate and fetch customer details
         if (!order.customer) {
             throw new Error(`Order missing customer ID: ${order._id}`);
@@ -22,8 +20,6 @@ async function generateInvoice(order) {
             throw new Error(`User not found for ID: ${order.customer}`);
         }
 
-        console.log("Customer found:", user.name, user.email);
-
         // Fetch full order details
         const populatedOrder = await OrderModel.findById(order._id)
             .populate('items.product')
@@ -32,8 +28,6 @@ async function generateInvoice(order) {
         if (!populatedOrder) {
             throw new Error(`Order not found in database: ${order._id}`);
         }
-
-        console.log("Order populated successfully");
 
         // Generate a unique invoice number
         const invoiceNumber = `INV-${order._id.toString().substring(0, 8)}-${Date.now()}`;
