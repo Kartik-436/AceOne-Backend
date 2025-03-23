@@ -1276,7 +1276,7 @@ async function placeOrder(req, res) {
                 await newOrder.save();
 
                 paymentResponse = {
-                    razorpayOrderId: razorpayOrder.id,
+                    razorpayOrderId: razorpayOrder.orderId,
                     amount: razorpayOrder.amount,
                     currency: razorpayOrder.currency,
                     status: razorpayOrder.status
