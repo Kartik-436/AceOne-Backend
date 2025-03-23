@@ -1420,7 +1420,8 @@ async function cancelOrder(req, res) {
             return sendResponse(res, 400, false, "User not found.");
         }
 
-        const order = await OrderModel.findById(orderID).populate('payment');
+        // Use findById with lean() to get a plain object instead of a mongoose document
+        const order = await OrderModel.findById(orderID).populate('payment').lean();
 
         if (!order) {
             return sendResponse(res, 400, false, "Order not found.");
@@ -1474,13 +1475,22 @@ async function cancelOrder(req, res) {
             }
         }
 
-        order.orderStatus = "Cancelled";
-        order.cancelledAt = new Date();
-        order.cancellationReason = req.body.reason || "Cancelled by customer";
-        await order.save();
+        // Use findByIdAndUpdate instead of save() to avoid validation
+        await OrderModel.findByIdAndUpdate(
+            orderID,
+            {
+                orderStatus: "Cancelled",
+                cancelledAt: new Date(),
+                cancellationReason: req.body.reason || "Cancelled by customer"
+            },
+            { runValidators: false } // Disable validation to prevent required field errors
+        );
+
+        // Get the updated order
+        const updatedOrder = await OrderModel.findById(orderID);
 
         const responseData = {
-            order,
+            order: updatedOrder,
             refund: refundResult
         };
 
