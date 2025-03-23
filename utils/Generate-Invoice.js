@@ -4,9 +4,8 @@ const OrderModel = require('../models/order.js');
 const InvoiceModel = require('../models/invoice.js');
 const PDFDocument = require('pdfkit');
 
-async function generateInvoice(order) {
+async function generateInvoice(Order) {
     try {
-        // Ensure order object is valid
         if (!order || !order._id) {
             throw new Error('Invalid order data received');
         }
@@ -28,7 +27,7 @@ async function generateInvoice(order) {
         // Fetch full order details
         const populatedOrder = await OrderModel.findById(order._id)
             .populate('items.product')
-            .populate('customer', 'name email phone');
+            .populate('customer');
 
         if (!populatedOrder) {
             throw new Error(`Order not found in database: ${order._id}`);

@@ -1299,7 +1299,7 @@ async function placeOrder(req, res) {
             }
 
             try {
-                await generateInvoice(newOrder._id);
+                await generateInvoice(newOrder);
             } catch (invoiceErr) {
                 console.error("Invoice Generation Error:", invoiceErr);
             }
@@ -1394,7 +1394,7 @@ async function verifyPayment(req, res) {
             order.orderStatus = 'Confirmed';
 
             // Generate invoice after successful payment
-            await generateInvoice(order._id);
+            await generateInvoice(order);
         } else {
             order.orderStatus = 'Payment Failed';
         }
