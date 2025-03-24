@@ -1663,7 +1663,6 @@ async function placeOrder(req, res) {
 
         const firstProduct = cart.items[0].productId;
         const ownerId = firstProduct.owner;
-        console.log("User ID being assigned to customer:", req.user.ID);
 
         const newOrder = new OrderModel({
             customer: req.user.ID,
@@ -1677,7 +1676,6 @@ async function placeOrder(req, res) {
         });
 
         try {
-            console.log("New Order Object before saving:", newOrder); // Debugging
             await newOrder.save();
         } catch (err) {
             console.error("Order Save Error:", err);
