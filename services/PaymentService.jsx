@@ -96,15 +96,14 @@ const capturePayment = async (paymentData) => {
 const processRefund = async (refundData) => {
     try {
         const options = {
-            payment_id: refundData.paymentId,
-            amount: (refundData.amount || 0) * 100,
+            amount: refundData.amount !== undefined && refundData.amount !== null ? refundData.amount * 100 : 0,
             notes: {
                 reason: refundData.reason || 'Customer requested',
-                ...refundData.metadata
+                ...(refundData.metadata || {})
             }
         };
 
-        const refund = await razorpayClient.refunds.create(options);
+        const refund = await razorpayClient.payments.refund(refundData.paymentId, options);
 
         return {
             refundId: refund.id,
@@ -115,7 +114,7 @@ const processRefund = async (refundData) => {
         };
     } catch (error) {
         console.error('Razorpay refund processing failed:', error);
-        throw new Error(error.message || 'Refund processing failed');
+        throw new Error((error.message || 'Unknown error') + ' - Refund processing failed');
     }
 };
 

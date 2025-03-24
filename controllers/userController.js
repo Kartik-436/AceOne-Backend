@@ -35,6 +35,440 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+const successfulOrderEmail = (customer, order) => {
+    const mailOptions = {
+        from: process.env.MAIL,
+        to: customer.email,
+        subject: 'Your Order Has Been Confirmed',
+        html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Order Confirmation</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    color: #333333;
+                    margin: 0;
+                    padding: 0;
+                }
+                .container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .header {
+                    background-color: #ffbb00;
+                    padding: 20px;
+                    text-align: center;
+                    color: white;
+                    border-radius: 5px 5px 0 0;
+                }
+                .content {
+                    background-color: #ffffff;
+                    padding: 30px;
+                    border-left: 1px solid #e6e6e6;
+                    border-right: 1px solid #e6e6e6;
+                }
+                .order-details {
+                    background-color: #f7f7f7;
+                    padding: 20px;
+                    border-radius: 5px;
+                    margin: 20px 0;
+                }
+                .order-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 15px;
+                }
+                .order-table th, .order-table td {
+                    padding: 10px;
+                    text-align: left;
+                    border-bottom: 1px solid #e6e6e6;
+                }
+                .order-total {
+                    font-weight: bold;
+                    text-align: right;
+                    margin-top: 15px;
+                }
+                .shipping-details {
+                    margin-top: 20px;
+                    padding-top: 20px;
+                    border-top: 1px solid #e6e6e6;
+                }
+                .footer {
+                    background-color: #f7f7f7;
+                    padding: 15px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #777777;
+                    border-radius: 0 0 5px 5px;
+                    border: 1px solid #e6e6e6;
+                }
+                .button {
+                    display: inline-block;
+                    background-color: #ffbb00;
+                    color: white;
+                    text-decoration: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    margin-top: 15px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Order Confirmation</h1>
+                </div>
+                <div class="content">
+                    <p>Hello ${customer.fullName},</p>
+                    <p>Thank you for your order! We're pleased to confirm that your order has been received and is now being processed.</p>
+                    
+                    <div class="order-details">
+                        <h2>Order Summary</h2>
+                        <p><strong>Order Number:</strong> ${order.invoiceNumber || order._id}</p>
+                        <p><strong>Order Date:</strong> ${new Date(order.orderDate).toLocaleDateString()}</p>
+                        <p><strong>Payment Method:</strong> ${order.modeOfPayment}</p>
+                        
+                        <table class="order-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${order.items.map(item => `
+                                    <tr>
+                                        <td>${item.product.name || 'Product'}</td>
+                                        <td>${item.quantity}</td>
+                                        <td>$${item.price.toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        
+                        <div class="order-total">
+                            <p>Subtotal: $${order.totalAmount.toFixed(2)}</p>
+                            <p>Shipping: $${order.deliveryFee.toFixed(2)}</p>
+                            <p>Total: $${(order.totalAmount + order.deliveryFee).toFixed(2)}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="shipping-details">
+                        <h2>Shipping Information</h2>
+                        <p><strong>Shipping Address:</strong><br>
+                        ${customer.fullName}<br>
+                        ${customer.address}<br>
+                        <strong>Contact:</strong> ${customer.contact}</p>
+                    </div>
+                    
+                    <p>You can track your order status by clicking the button below:</p>
+                    <div style="text-align: center;">
+                        <a href="${process.env.WEBSITE_URL}/orders/${order._id}" class="button">Track Order</a>
+                    </div>
+                    
+                    <p>If you have any questions or need further assistance, please contact our customer support team.</p>
+                    
+                    <p>Thank you for shopping with us!</p>
+                </div>
+                <div class="footer">
+                    <p>&copy; 2025 Aceone. All rights reserved.</p>
+                    <p>This is an automated message, please do not reply to this email.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `
+    };
+
+    return mailOptions;
+};
+
+const unsuccessfulOrderEmail = (customer, order, reason) => {
+    const mailOptions = {
+        from: process.env.MAIL,
+        to: customer.email,
+        subject: 'Issue with Your Order',
+        html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Order Issue</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    color: #333333;
+                    margin: 0;
+                    padding: 0;
+                }
+                .container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .header {
+                    background-color: #E25A4A;
+                    padding: 20px;
+                    text-align: center;
+                    color: white;
+                    border-radius: 5px 5px 0 0;
+                }
+                .content {
+                    background-color: #ffffff;
+                    padding: 30px;
+                    border-left: 1px solid #e6e6e6;
+                    border-right: 1px solid #e6e6e6;
+                }
+                .order-details {
+                    background-color: #f7f7f7;
+                    padding: 20px;
+                    border-radius: 5px;
+                    margin: 20px 0;
+                }
+                .reason-box {
+                    background-color: #ffeeee;
+                    border-left: 4px solid #E25A4A;
+                    padding: 15px;
+                    margin: 20px 0;
+                }
+                .footer {
+                    background-color: #f7f7f7;
+                    padding: 15px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #777777;
+                    border-radius: 0 0 5px 5px;
+                    border: 1px solid #e6e6e6;
+                }
+                .button {
+                    display: inline-block;
+                    background-color: #ffbb00;
+                    color: white;
+                    text-decoration: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    margin-top: 15px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Order Processing Issue</h1>
+                </div>
+                <div class="content">
+                    <p>Hello ${customer.fullName},</p>
+                    <p>We regret to inform you that we encountered an issue while processing your recent order.</p>
+                    
+                    <div class="order-details">
+                        <h2>Order Information</h2>
+                        <p><strong>Order Number:</strong> ${order.invoiceNumber || order._id}</p>
+                        <p><strong>Order Date:</strong> ${new Date(order.orderDate).toLocaleDateString()}</p>
+                        <p><strong>Payment Method:</strong> ${order.modeOfPayment}</p>
+                    </div>
+                    
+                    <div class="reason-box">
+                        <h3>Issue Details</h3>
+                        <p>${reason || "There was an issue processing your payment. Your order has not been completed."}</p>
+                    </div>
+                    
+                    <p>What happens next:</p>
+                    <ul>
+                        <li>Your order has been placed on hold</li>
+                        <li>No payment has been charged to your account</li>
+                        <li>You can retry your order with a different payment method</li>
+                    </ul>
+                    
+                    <div style="text-align: center;">
+                        <a href="${process.env.WEBSITE_URL}/cart" class="button">Retry Order</a>
+                    </div>
+                    
+                    <p>If you need assistance or have any questions, please contact our customer support team, and we'll be happy to help.</p>
+                    
+                    <p>We apologize for any inconvenience this may have caused.</p>
+                </div>
+                <div class="footer">
+                    <p>&copy; 2025 Aceone. All rights reserved.</p>
+                    <p>This is an automated message, please do not reply to this email.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `
+    };
+
+    return mailOptions;
+};
+
+const cancelledOrderEmail = (customer, order) => {
+    const mailOptions = {
+        from: process.env.MAIL,
+        to: customer.email,
+        subject: 'Your Order Has Been Cancelled',
+        html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Order Cancellation</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    color: #333333;
+                    margin: 0;
+                    padding: 0;
+                }
+                .container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .header {
+                    background-color: #777777;
+                    padding: 20px;
+                    text-align: center;
+                    color: white;
+                    border-radius: 5px 5px 0 0;
+                }
+                .content {
+                    background-color: #ffffff;
+                    padding: 30px;
+                    border-left: 1px solid #e6e6e6;
+                    border-right: 1px solid #e6e6e6;
+                }
+                .order-details {
+                    background-color: #f7f7f7;
+                    padding: 20px;
+                    border-radius: 5px;
+                    margin: 20px 0;
+                }
+                .order-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 15px;
+                }
+                .order-table th, .order-table td {
+                    padding: 10px;
+                    text-align: left;
+                    border-bottom: 1px solid #e6e6e6;
+                }
+                .cancellation-box {
+                    background-color: #f7f7f7;
+                    padding: 15px;
+                    margin: 20px 0;
+                    border-left: 4px solid #777777;
+                }
+                .refund-info {
+                    margin-top: 20px;
+                    padding: 15px;
+                    background-color: #fffbed;
+                    border-radius: 5px;
+                    border-left: 4px solid #ffbb00;
+                }
+                .footer {
+                    background-color: #f7f7f7;
+                    padding: 15px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #777777;
+                    border-radius: 0 0 5px 5px;
+                    border: 1px solid #e6e6e6;
+                }
+                .button {
+                    display: inline-block;
+                    background-color: #ffbb00;
+                    color: white;
+                    text-decoration: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    margin-top: 15px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Order Cancellation</h1>
+                </div>
+                <div class="content">
+                    <p>Hello ${customer.fullName},</p>
+                    <p>We're confirming that your order has been cancelled as requested.</p>
+                    
+                    <div class="order-details">
+                        <h2>Cancelled Order Details</h2>
+                        <p><strong>Order Number:</strong> ${order.invoiceNumber || order._id}</p>
+                        <p><strong>Order Date:</strong> ${new Date(order.orderDate).toLocaleDateString()}</p>
+                        <p><strong>Cancellation Date:</strong> ${new Date(order.cancelledAt || Date.now()).toLocaleDateString()}</p>
+                        
+                        <table class="order-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${order.items.map(item => `
+                                    <tr>
+                                        <td>${item.product.name || 'Product'}</td>
+                                        <td>${item.quantity}</td>
+                                        <td>$${item.price.toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        
+                        <p><strong>Order Total:</strong> $${(order.totalAmount + order.deliveryFee).toFixed(2)}</p>
+                    </div>
+                    
+                    <div class="cancellation-box">
+                        <h3>Cancellation Reason</h3>
+                        <p>${order.cancellationReason || "Order cancelled per customer request."}</p>
+                    </div>
+                    
+                    ${order.payment ? `
+                    <div class="refund-info">
+                        <h3>Refund Information</h3>
+                        <p>A refund of $${(order.totalAmount + order.deliveryFee).toFixed(2)} will be processed to your original payment method within 3-5 business days.</p>
+                        <p><strong>Refund Reference:</strong> REF-${order.invoiceNumber || order._id}</p>
+                    </div>
+                    ` : `
+                    <p>Since your payment was not processed, no refund is necessary.</p>
+                    `}
+                    
+                    <p>We hope to serve you again in the future. If you'd like to place a new order, please visit our website.</p>
+                    
+                    <div style="text-align: center;">
+                        <a href="${process.env.WEBSITE_URL}" class="button">Continue Shopping</a>
+                    </div>
+                    
+                    <p>If you have any questions about this cancellation or need further assistance, please contact our customer support team.</p>
+                </div>
+                <div class="footer">
+                    <p>&copy; 2025 Aceone. All rights reserved.</p>
+                    <p>This is an automated message, please do not reply to this email.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `
+    };
+
+    return mailOptions;
+};
+
 async function registerUser(req, res) {
     try {
         const { fullName, email, password, contact, dateOfBirth } = req.body;
@@ -679,7 +1113,6 @@ async function getUserProfile(req, res) {
     }
 }
 
-
 async function updateUserProfile(req, res) {
     try {
         const { fullName, contact, dateOfBirth, address } = req.body;
@@ -721,7 +1154,6 @@ async function updateUserProfile(req, res) {
         return sendResponse(res, 500, false, "Something went wrong.");
     }
 }
-
 
 async function updateProfilePicture(req, res) {
     try {
@@ -892,7 +1324,6 @@ async function addToCart(req, res) {
         return sendResponse(res, 500, false, "Something went wrong.", err.message);
     }
 }
-
 
 async function updateCartQuantity(req, res) {
     try {
@@ -1239,7 +1670,7 @@ async function placeOrder(req, res) {
             modeOfPayment,
             orderStatus: modeOfPayment === "Cash on Delivery" ? "Pending" : "Awaiting Payment",
             deliveryFee
-        });
+        }).populate(customer, items, items.product);
 
         await newOrder.save();
 
@@ -1323,6 +1754,13 @@ async function placeOrder(req, res) {
             payment: paymentResponse
         };
 
+        try {
+            const successEmail = successfulOrderEmail(userExists, newOrder);
+            await transporter.sendMail(successEmail);
+        } catch (emailErr) {
+            console.error("Order Email Sending Error:", emailErr);
+        }
+
         return sendResponse(res, 200, true, "Order placed successfully.", responseData);
     } catch (err) {
         console.error("Place Order Error:", err.message);
@@ -1369,10 +1807,17 @@ async function verifyPayment(req, res) {
         }
 
         // Update order status
-        const order = await OrderModel.findById(orderId);
+        const order = await OrderModel.findById(orderId).populate('customer');
 
         if (!order) {
             return sendResponse(res, 404, false, "Order not found.");
+        }
+
+        // Get user details for email
+        const customer = await UserModel.findById(order.customer);
+
+        if (!customer) {
+            return sendResponse(res, 404, false, "Customer not found.");
         }
 
         // Update product stock only after successful payment
@@ -1394,8 +1839,17 @@ async function verifyPayment(req, res) {
 
             // Generate invoice after successful payment
             await generateInvoice(order);
+
+            // Send successful order email
+            const successEmail = successfulOrderEmail(customer, order);
+            await transporter.sendMail(successEmail);
         } else {
             order.orderStatus = 'Payment Failed';
+
+            // Send unsuccessful order email
+            const reason = "Payment verification failed. Please try again !";
+            const unsuccessEmail = unsuccessfulOrderEmail(customer, order, reason);
+            await transporter.sendMail(unsuccessEmail);
         }
 
         await order.save();
@@ -1474,19 +1928,25 @@ async function cancelOrder(req, res) {
             }
         }
 
+        const cancellationReason = req.body.reason || "Cancelled by customer";
+
         // Use findByIdAndUpdate instead of save() to avoid validation
         await OrderModel.findByIdAndUpdate(
             orderID,
             {
                 orderStatus: "Cancelled",
                 cancelledAt: new Date(),
-                cancellationReason: req.body.reason || "Cancelled by customer"
+                cancellationReason: cancellationReason
             },
             { runValidators: false } // Disable validation to prevent required field errors
         );
 
         // Get the updated order
         const updatedOrder = await OrderModel.findById(orderID);
+
+        // Send cancellation email
+        const cancelEmail = cancelledOrderEmail(user, updatedOrder);
+        await transporter.sendMail(cancelEmail);
 
         const responseData = {
             order: updatedOrder,
@@ -1563,7 +2023,6 @@ async function addToWishlist(req, res) {
         return sendResponse(res, 500, false, "Something went wrong.");
     }
 }
-
 
 async function removeFromWishlist(req, res) {
     try {
