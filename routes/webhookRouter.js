@@ -9,7 +9,6 @@ const CartModel = require('../models/cart.js')
 const PaymentModel = require("../models/payment.js")
 const InvoiceModel = require("../models/invoice.js")
 const { generateInvoice } = require("../utils/Generate-Invoice")
-const dbgr = console.error;
 
 router.post('/razorpay', async (req, res) => {
     try {
@@ -17,14 +16,12 @@ router.post('/razorpay', async (req, res) => {
         const requestBody = JSON.stringify(req.body);
 
         if (!signature || !verifyWebhookSignature(requestBody, signature)) {
-            dbgr("Webhook Signature Verification Failed");
+
             return res.status(401).json({ success: false, message: "Invalid signature" });
         }
 
         const event = req.body;
         const processedEvent = processWebhookEvent(event);
-        dbgr("Razorpay Webhook Event:", event.event, processedEvent);
-
 
         switch (event.event) {
             case 'payment.authorized':
@@ -47,8 +44,6 @@ router.post('/razorpay', async (req, res) => {
 
         res.status(200).json({ success: true, message: "Webhook received and processed" });
     } catch (err) {
-        dbgr("Webhook Error:", err.message);
-
         res.status(200).json({ success: false, message: "Webhook received but processing failed" });
     }
 });
@@ -73,7 +68,7 @@ async function handlePaymentAuthorized(eventData) {
         );
 
         if (!payment) {
-            dbgr("Payment record not found for authorized payment:", eventData.paymentId);
+
             return;
         }
 
@@ -84,7 +79,7 @@ async function handlePaymentAuthorized(eventData) {
             { new: true }
         );
     } catch (err) {
-        dbgr("Error handling payment.authorized:", err.message);
+
         throw err;
     }
 }
@@ -107,7 +102,7 @@ async function handlePaymentCaptured(eventData) {
         );
 
         if (!payment) {
-            dbgr("Payment record not found for captured payment:", eventData.paymentId);
+
             return;
         }
 
@@ -115,7 +110,7 @@ async function handlePaymentCaptured(eventData) {
         const order = await OrderModel.findById(payment.order);
 
         if (!order) {
-            dbgr("Order not found for payment:", payment._id);
+
             return;
         }
 
@@ -142,10 +137,10 @@ async function handlePaymentCaptured(eventData) {
         try {
             await generateInvoice(order._id);
         } catch (invoiceErr) {
-            dbgr("Invoice Generation Error:", invoiceErr);
+
         }
     } catch (err) {
-        dbgr("Error handling payment.captured:", err.message);
+
         throw err;
     }
 }
@@ -168,7 +163,7 @@ async function handlePaymentFailed(eventData) {
         );
 
         if (!payment) {
-            dbgr("Payment record not found for failed payment:", eventData.paymentId);
+
             return;
         }
 
@@ -179,7 +174,7 @@ async function handlePaymentFailed(eventData) {
             { new: true }
         );
     } catch (err) {
-        dbgr("Error handling payment.failed:", err.message);
+
         throw err;
     }
 }
@@ -202,7 +197,7 @@ async function handleRefundProcessed(eventData) {
         );
 
         if (!payment) {
-            dbgr("Payment record not found for refund:", eventData.refundId);
+
             return;
         }
 
@@ -216,7 +211,7 @@ async function handleRefundProcessed(eventData) {
             await order.save();
         }
     } catch (err) {
-        dbgr("Error handling refund.processed:", err.message);
+
         throw err;
     }
 }
