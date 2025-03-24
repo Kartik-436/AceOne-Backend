@@ -111,7 +111,8 @@ const successfulOrderEmail = (customer, order) => {
                 .button {
                     display: inline-block;
                     background-color: #ffbb00;
-                    color: white;
+                    color: black;
+                    font-weight: 800;
                     text-decoration: none;
                     padding: 10px 20px;
                     border-radius: 5px;
@@ -147,7 +148,7 @@ const successfulOrderEmail = (customer, order) => {
                                     <tr>
                                         <td>${item.product.name || 'Product'}</td>
                                         <td>${item.quantity}</td>
-                                        <td>$${item.price.toFixed(2)}</td>
+                                        <td>₹${item.price.toFixed(2)}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -156,7 +157,7 @@ const successfulOrderEmail = (customer, order) => {
                         <div class="order-total">
                             <p>Subtotal: $${order.totalAmount.toFixed(2)}</p>
                             <p>Shipping: $${order.deliveryFee.toFixed(2)}</p>
-                            <p>Total: $${(order.totalAmount + order.deliveryFee).toFixed(2)}</p>
+                            <p>Total: ₹${(order.totalAmount + order.deliveryFee).toFixed(2)}</p>
                         </div>
                     </div>
                     
@@ -170,7 +171,7 @@ const successfulOrderEmail = (customer, order) => {
                     
                     <p>You can track your order status by clicking the button below:</p>
                     <div style="text-align: center;">
-                        <a href="${process.env.WEBSITE_URL}/orders/${order._id}" class="button">Track Order</a>
+                        <a href="${process.env.WEBSITE_URL}/userprofile" class="button">Track Order</a>
                     </div>
                     
                     <p>If you have any questions or need further assistance, please contact our customer support team.</p>
@@ -252,7 +253,8 @@ const unsuccessfulOrderEmail = (customer, order, reason) => {
                 .button {
                     display: inline-block;
                     background-color: #ffbb00;
-                    color: white;
+                    color: black;
+                    font-weight: 800;
                     text-decoration: none;
                     padding: 10px 20px;
                     border-radius: 5px;
@@ -388,7 +390,8 @@ const cancelledOrderEmail = (customer, order) => {
                 .button {
                     display: inline-block;
                     background-color: #ffbb00;
-                    color: white;
+                    color: black;
+                    font-weight: 800;
                     text-decoration: none;
                     padding: 10px 20px;
                     border-radius: 5px;
@@ -430,7 +433,7 @@ const cancelledOrderEmail = (customer, order) => {
                             </tbody>
                         </table>
                         
-                        <p><strong>Order Total:</strong> $${(order.totalAmount + order.deliveryFee).toFixed(2)}</p>
+                        <p><strong>Order Total:</strong> ₹${(order.totalAmount + order.deliveryFee).toFixed(2)}</p>
                     </div>
                     
                     <div class="cancellation-box">
@@ -441,7 +444,7 @@ const cancelledOrderEmail = (customer, order) => {
                     ${order.payment ? `
                     <div class="refund-info">
                         <h3>Refund Information</h3>
-                        <p>A refund of $${(order.totalAmount + order.deliveryFee).toFixed(2)} will be processed to your original payment method within 3-5 business days.</p>
+                        <p>A refund of ₹${(order.totalAmount + order.deliveryFee).toFixed(2)} will be processed to your original payment method within 3-5 business days.</p>
                         <p><strong>Refund Reference:</strong> REF-${order.invoiceNumber || order._id}</p>
                     </div>
                     ` : `
