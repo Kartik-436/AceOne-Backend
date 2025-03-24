@@ -155,8 +155,8 @@ const successfulOrderEmail = (customer, order) => {
                         </table>
                         
                         <div class="order-total">
-                            <p>Subtotal: $${order.totalAmount.toFixed(2)}</p>
-                            <p>Shipping: $${order.deliveryFee.toFixed(2)}</p>
+                            <p>Subtotal: ₹${order.totalAmount.toFixed(2)}</p>
+                            <p>Shipping: ₹${order.deliveryFee.toFixed(2)}</p>
                             <p>Total: ₹${(order.totalAmount + order.deliveryFee).toFixed(2)}</p>
                         </div>
                     </div>
@@ -427,7 +427,7 @@ const cancelledOrderEmail = (customer, order) => {
                                     <tr>
                                         <td>${item.product.name || 'Product'}</td>
                                         <td>${item.quantity}</td>
-                                        <td>$${item.price.toFixed(2)}</td>
+                                        <td>₹${item.price.toFixed(2)}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
