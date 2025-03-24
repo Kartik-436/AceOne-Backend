@@ -1659,8 +1659,6 @@ async function placeOrder(req, res) {
             });
         }
 
-        totalAmount += deliveryFee;
-
         const firstProduct = cart.items[0].productId;
         const ownerId = firstProduct.owner;
 
@@ -1681,6 +1679,8 @@ async function placeOrder(req, res) {
             console.error("Order Save Error:", err);
             return sendResponse(res, 500, false, "Error saving order: " + err.message);
         }
+
+        totalAmount += deliveryFee;
 
         let paymentResponse = null;
 
