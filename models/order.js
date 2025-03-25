@@ -14,16 +14,31 @@ const OrderSchema = mongoose.Schema({
         },
         quantity: {
             type: Number,
+            required: true,
+            min: 1
+        },
+        selectedSize: {
+            type: String,
+            required: true
+        },
+        selectedColor: {
+            type: String,
             required: true
         },
         price: {
             type: Number,
             required: true
+        },
+        discountPrice: {
+            type: Number
         }
     }],
     totalAmount: {
         type: Number,
         required: true
+    },
+    discountedTotalAmount: {
+        type: Number
     },
     deliveryFee: {
         type: Number,
@@ -56,6 +71,8 @@ const OrderSchema = mongoose.Schema({
     cancellationReason: String,
     deliveredAt: Date,
     invoiceNumber: String
+}, {
+    timestamps: true
 });
 
 const OrderModel = mongoose.model('Order', OrderSchema);

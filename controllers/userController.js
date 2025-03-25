@@ -1234,7 +1234,12 @@ async function getUserCart(req, res) {
 
 async function addToCart(req, res) {
     try {
-        const { productID, quantity = 1 } = req.body;
+        const {
+            productID,
+            quantity = 1,
+            selectedSize,
+            selectedColor
+        } = req.body;
 
         if (!productID) {
             return sendResponse(res, 400, false, "Product ID is required.");
@@ -1243,6 +1248,15 @@ async function addToCart(req, res) {
         const product = await ProductModel.findById(productID);
         if (!product) {
             return sendResponse(res, 404, false, "Product not found.");
+        }
+
+        // Validate size and color
+        if (!product.size.includes(selectedSize)) {
+            return sendResponse(res, 400, false, "Invalid product size selected.");
+        }
+
+        if (!product.color.includes(selectedColor)) {
+            return sendResponse(res, 400, false, "Invalid product color selected.");
         }
 
         // Get identification info
@@ -1254,7 +1268,7 @@ async function addToCart(req, res) {
             sessionId = Math.random().toString(36).substring(2);
             res.cookie("sessionId", sessionId, {
                 httpOnly: true,
-                secure: true, // Must be true when sameSite is None
+                secure: true,
                 sameSite: "None",
                 maxAge: 24 * 60 * 60 * 1000
             });
@@ -1280,8 +1294,13 @@ async function addToCart(req, res) {
             });
         }
 
+        // Find existing item with same product, size, and color
         const existingItemIndex = cart.items.findIndex(
-            (item) => item.productId && item.productId.toString() === productID
+            (item) =>
+                item.productId &&
+                item.productId.toString() === productID &&
+                item.selectedSize === selectedSize &&
+                item.selectedColor === selectedColor
         );
 
         if (existingItemIndex !== -1) {
@@ -1294,8 +1313,15 @@ async function addToCart(req, res) {
 
             cart.items[existingItemIndex].quantity = newQuantity;
         } else {
-            // Add new item
-            cart.items.push({ productId: productID, quantity: validQuantity });
+            // Add new item with size, color, price, and discount price
+            cart.items.push({
+                productId: productID,
+                quantity: validQuantity,
+                selectedSize,
+                selectedColor,
+                price: product.price,
+                discountPrice: product.discountPrice
+            });
         }
 
         await cart.save();
@@ -1638,6 +1664,7 @@ async function placeOrder(req, res) {
         }
 
         let totalAmount = 0;
+        let discountedTotalAmount = 0;
         const orderItems = [];
 
         for (let item of cart.items) {
@@ -1650,12 +1677,19 @@ async function placeOrder(req, res) {
                 return sendResponse(res, 400, false, `Product ${product.name} is out of stock.`);
             }
 
-            totalAmount += (product.discount === 0 ? product.price : product.discountPrice) * item.quantity;
+            const itemPrice = product.discount === 0 ? product.price : product.discountPrice;
+            const itemTotalPrice = itemPrice * item.quantity;
+
+            totalAmount += product.price * item.quantity;
+            discountedTotalAmount += itemTotalPrice;
 
             orderItems.push({
                 product: product._id,
                 quantity: item.quantity,
-                price: product.discount === 0 ? product.price : product.discountPrice
+                selectedSize: item.selectedSize,
+                selectedColor: item.selectedColor,
+                price: product.price,
+                discountPrice: product.discountPrice
             });
         }
 
@@ -1666,6 +1700,7 @@ async function placeOrder(req, res) {
             customer: req.user.ID,
             items: orderItems,
             totalAmount,
+            discountedTotalAmount,
             owner: ownerId,
             orderDate: new Date(),
             modeOfPayment,
@@ -1680,15 +1715,15 @@ async function placeOrder(req, res) {
             return sendResponse(res, 500, false, "Error saving order: " + err.message);
         }
 
-        totalAmount += deliveryFee;
+        discountedTotalAmount += deliveryFee;
 
         let paymentResponse = null;
 
         if (modeOfPayment === "Online") {
             try {
-                // Create Razorpay order
+                // Razorpay order creation logic remains the same
                 const razorpayOrderData = {
-                    amount: totalAmount,
+                    amount: discountedTotalAmount,
                     currency: 'INR',
                     receipt: newOrder._id.toString(),
                     customerId: req.user.ID,
@@ -1697,11 +1732,11 @@ async function placeOrder(req, res) {
 
                 const razorpayOrder = await createRazorpayOrder(razorpayOrderData);
 
-                // Create payment record in DB
+                // Payment record creation logic remains the same
                 const paymentRecord = new PaymentModel({
                     order: newOrder._id,
                     customer: req.user.ID,
-                    amount: totalAmount,
+                    amount: discountedTotalAmount,
                     currency: 'INR',
                     razorpayOrderId: razorpayOrder.orderId,
                     status: 'created'
@@ -1709,7 +1744,6 @@ async function placeOrder(req, res) {
 
                 await paymentRecord.save();
 
-                // Associate payment with order
                 newOrder.payment = paymentRecord._id;
                 await newOrder.save();
 
@@ -1724,7 +1758,7 @@ async function placeOrder(req, res) {
                 return sendResponse(res, 500, false, "Payment processing failed. Try again.");
             }
         } else {
-            // For Cash on Delivery, update product stock immediately
+            // Cash on Delivery logic remains mostly the same
             for (let item of cart.items) {
                 const product = await ProductModel.findById(item.productId);
                 if (product) {
@@ -1744,6 +1778,7 @@ async function placeOrder(req, res) {
             }
         }
 
+        // Rest of the function remains the same
         const userExists = await UserModel.findById(req.user.ID);
         if (!userExists) {
             return sendResponse(res, 400, false, "User not found.");
@@ -1754,7 +1789,6 @@ async function placeOrder(req, res) {
             $set: { cart: null }
         });
 
-        // Remove the cart after order is placed
         await CartModel.findOneAndDelete({ userId: req.user.ID });
 
         const responseData = {

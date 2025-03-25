@@ -187,7 +187,9 @@ async function deleteOwner(req, res) {
 async function addProduct(req, res) {
     try {
         let discountPrice = 0;
-        const { name, price, discount, size, color, category, stock } = req.body;
+        const { name, description, price, discount, size, color, category, stock } = req.body;
+
+        // Calculate discount price if discount is provided
         if (discount !== undefined && discount !== null) {
             let disc = (price * discount) / 100;
             discountPrice = price - disc;
@@ -195,9 +197,10 @@ async function addProduct(req, res) {
 
         const product = new productModel({
             name,
+            description,
             price,
             discount,
-            discountPrice: discountPrice,
+            discountPrice,
             size,
             color,
             category,
@@ -205,6 +208,7 @@ async function addProduct(req, res) {
             owner: req.user.ID
         });
 
+        // Handle main product image
         if (req.file) {
             product.image = {
                 data: req.file.buffer,
@@ -212,8 +216,17 @@ async function addProduct(req, res) {
             };
         }
 
+        // Handle additional images if multiple files are uploaded
+        if (req.files && req.files.additionalImages) {
+            product.additionalImages = req.files.additionalImages.map(file => ({
+                data: file.buffer,
+                contentType: file.mimetype
+            }));
+        }
+
         await product.save();
 
+        // Convert image to base64 for response
         let base64Image = null;
         if (product.image && product.image.data) {
             base64Image = `data:${product.image.contentType};base64,${product.image.data.toString("base64")}`;
@@ -224,7 +237,7 @@ async function addProduct(req, res) {
             image: base64Image,
         });
     } catch (error) {
-        sendResponse(res, 500, false, "error", error.message);
+        sendResponse(res, 500, false, "Error adding product", error.message);
     }
 }
 
@@ -235,18 +248,50 @@ async function updateProduct(req, res) {
             return sendResponse(res, 404, false, "Product not found");
         }
 
-        const { name, price, discount, size, color, category, stock } = req.body;
-        let updateFields = { name, price, discount, size, color, category, stock };
+        const { name, description, price, discount, size, color, category, stock } = req.body;
+        let updateFields = {
+            name,
+            description,
+            price,
+            discount,
+            size,
+            color,
+            category,
+            stock
+        };
 
+        // Remove undefined or null fields
         updateFields = Object.fromEntries(
             Object.entries(updateFields).filter(([_, value]) => value !== undefined && value !== null)
         );
 
+        // Handle main product image update
         if (req.file) {
             updateFields.image = {
                 data: req.file.buffer,
                 contentType: req.file.mimetype,
             };
+        }
+
+        // Handle additional images update
+        if (req.files && req.files.additionalImages) {
+            updateFields.additionalImages = req.files.additionalImages.map(file => ({
+                data: file.buffer,
+                contentType: file.mimetype
+            }));
+        }
+
+        // Recalculate discount price if price or discount is changed
+        if (updateFields.price !== undefined || updateFields.discount !== undefined) {
+            const currentPrice = updateFields.price || product.price;
+            const currentDiscount = updateFields.discount !== undefined
+                ? updateFields.discount
+                : product.discount;
+
+            if (currentDiscount !== undefined && currentDiscount !== null) {
+                const disc = (currentPrice * currentDiscount) / 100;
+                updateFields.discountPrice = currentPrice - disc;
+            }
         }
 
         const updatedProduct = await productModel.findOneAndUpdate(
@@ -265,7 +310,7 @@ async function updateProduct(req, res) {
             image: base64Image,
         });
     } catch (error) {
-        sendResponse(res, 500, false, "error", error.message);
+        sendResponse(res, 500, false, "Error updating product", error.message);
     }
 }
 
@@ -277,15 +322,16 @@ async function deleteProduct(req, res) {
         }
 
         await productModel.findOneAndDelete({ _id: req.params.id });
-        sendResponse(res, 200, true, "Product Deleted");
+        sendResponse(res, 200, true, "Product deleted successfully");
     } catch (error) {
-        sendResponse(res, 500, false, "error", error.message);
+        sendResponse(res, 500, false, "Error deleting product", error.message);
     }
 }
 
 async function getAllProducts(req, res) {
     try {
-        const products = await productModel.find({ owner: req.user.ID });
+        const products = await productModel.find({ owner: req.user.ID })
+            .sort({ createdAt: -1 }); // Sort by most recent first
 
         const formattedProducts = products.map(product => {
             let base64Image = null;
@@ -301,13 +347,14 @@ async function getAllProducts(req, res) {
 
         sendResponse(res, 200, true, "Products fetched successfully", formattedProducts);
     } catch (error) {
-        sendResponse(res, 500, false, "error", error.message);
+        sendResponse(res, 500, false, "Error fetching products", error.message);
     }
 }
 
 async function getProductById(req, res) {
     try {
-        const product = await productModel.findOne({ _id: req.params.id });
+        const product = await productModel.findOne({ _id: req.params.id })
+            .populate('reviews.user', 'name email'); // Optionally populate user details for reviews
 
         if (!product) {
             return sendResponse(res, 404, false, "Product not found");
@@ -318,12 +365,20 @@ async function getProductById(req, res) {
             base64Image = `data:${product.image.contentType};base64,${product.image.data.toString("base64")}`;
         }
 
+        // Convert additional images to base64 if exists
+        const base64AdditionalImages = product.additionalImages
+            ? product.additionalImages.map(img =>
+                `data:${img.contentType};base64,${img.data.toString("base64")}`
+            )
+            : [];
+
         sendResponse(res, 200, true, "Product fetched successfully", {
             ...product.toObject(),
             image: base64Image,
+            additionalImages: base64AdditionalImages
         });
     } catch (error) {
-        sendResponse(res, 500, false, "error", error.message);
+        sendResponse(res, 500, false, "Error fetching product", error.message);
     }
 }
 

@@ -33,9 +33,16 @@ function formatProductImage(product) {
         formattedProduct = product.toObject();
     }
 
-    // Convert Buffer image data to base64 string
+    // Convert main image to base64
     if (formattedProduct.image && formattedProduct.image.data) {
         formattedProduct.image = `data:${formattedProduct.image.contentType};base64,${formattedProduct.image.data.toString("base64")}`;
+    }
+
+    // Convert additional images to base64
+    if (formattedProduct.additionalImages && formattedProduct.additionalImages.length) {
+        formattedProduct.additionalImages = formattedProduct.additionalImages.map(img =>
+            `data:${img.contentType};base64,${img.data.toString("base64")}`
+        );
     }
 
     return formattedProduct;
