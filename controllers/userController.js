@@ -2172,7 +2172,7 @@ async function addReview(req, res) {
         return sendResponse(res, 201, true, "Review added successfully.", newReview);
     } catch (err) {
         dbgr("Add Review Error:", err.message);
-        return sendResponse(res, 500, false, "Something went wrong while adding review." + err, []);
+        return sendResponse(res, 500, false, `Something went wrong while adding review. ${err}`);
     }
 }
 
