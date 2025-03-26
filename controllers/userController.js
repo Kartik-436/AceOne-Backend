@@ -2122,6 +2122,233 @@ async function searchUsers(req, res) {
     }
 }
 
+async function addReview(req, res) {
+    try {
+        const { productID, rating, comment } = req.body;
+        const userID = req.user.ID;
+
+        // Validate input
+        if (!rating || !comment) {
+            return sendResponse(res, 400, false, "Rating and comment are required.");
+        }
+
+        // Check if product exists
+        const product = await ProductModel.findById(productID);
+        if (!product) {
+            return sendResponse(res, 404, false, "Product not found.");
+        }
+
+        // Check if user has already reviewed this product
+        const existingReview = product.reviews.find(review =>
+            review.user.toString() === userID.toString()
+        );
+
+        if (existingReview) {
+            return sendResponse(res, 400, false, "You have already reviewed this product.");
+        }
+
+        // Create review object
+        const newReview = {
+            user: userID,
+            rating,
+            comment,
+            createdAt: new Date()
+        };
+
+        // Add review to product
+        product.reviews.push(newReview);
+
+        // Update product ratings
+        const totalRatings = product.reviews.reduce((sum, review) => sum + review.rating, 0);
+        product.ratings = totalRatings / product.reviews.length;
+
+        // Save product
+        await product.save();
+
+        // Add review to user's reviews
+        const user = await UserModel.findById(userID);
+        user.reviews.push({
+            product: productID,
+            rating,
+            comment
+        });
+        await user.save();
+
+        return sendResponse(res, 201, true, "Review added successfully.", newReview);
+    } catch (err) {
+        dbgr("Add Review Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong while adding review.");
+    }
+}
+
+async function updateReview(req, res) {
+    try {
+        const { productID, reviewID, rating, comment } = req.body;
+        const userID = req.user.ID;
+
+        // Validate input
+        if (!rating || !comment) {
+            return sendResponse(res, 400, false, "Rating and comment are required.");
+        }
+
+        // Find the product
+        const product = await ProductModel.findById(productID);
+        if (!product) {
+            return sendResponse(res, 404, false, "Product not found.");
+        }
+
+        // Find the review in the product
+        const reviewIndex = product.reviews.findIndex(review =>
+            review._id.toString() === reviewID && review.user.toString() === userID.toString()
+        );
+
+        if (reviewIndex === -1) {
+            return sendResponse(res, 404, false, "Review not found.");
+        }
+
+        // Update product review
+        product.reviews[reviewIndex].rating = rating;
+        product.reviews[reviewIndex].comment = comment;
+        product.reviews[reviewIndex].createdAt = new Date();
+
+        // Recalculate overall product rating
+        const totalRatings = product.reviews.reduce((sum, review) => sum + review.rating, 0);
+        product.ratings = totalRatings / product.reviews.length;
+
+        // Save product
+        await product.save();
+
+        // Update user's review
+        await UserModel.findOneAndUpdate(
+            {
+                _id: userID,
+                'reviews.product': productID
+            },
+            {
+                $set: {
+                    'reviews.$.rating': rating,
+                    'reviews.$.comment': comment
+                }
+            }
+        );
+
+        return sendResponse(res, 200, true, "Review updated successfully.");
+    } catch (err) {
+        dbgr("Update Review Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong while updating review.");
+    }
+}
+
+async function deleteReview(req, res) {
+    try {
+        const { productID } = req.body;
+        const userID = req.user.ID;
+
+        const product = await ProductModel.findById(productID);
+        if (!product) {
+            return sendResponse(res, 404, false, "Product not found.");
+        }
+
+        const initialReviewCount = product.reviews.length;
+        product.reviews = product.reviews.filter(review =>
+            review.user.toString() !== userID.toString()
+        );
+
+        if (product.reviews.length < initialReviewCount) {
+            const totalRatings = product.reviews.reduce((sum, review) => sum + review.rating, 0);
+            product.ratings = product.reviews.length > 0
+                ? totalRatings / product.reviews.length
+                : 0;
+
+            await product.save();
+        }
+
+        await UserModel.findByIdAndUpdate(userID, {
+            $pull: { reviews: { product: productID } }
+        });
+
+        return sendResponse(res, 200, true, "Review deleted successfully.");
+    } catch (err) {
+        dbgr("Delete Review Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong while deleting review.");
+    }
+}
+
+async function getProductReviews(req, res) {
+    try {
+        const { productID } = req.params;
+
+        // Find product and populate reviews with user details
+        const product = await ProductModel.findById(productID)
+            .populate({
+                path: 'reviews.user',
+                select: 'fullName picture' // Select only necessary user details
+            });
+
+        if (!product) {
+            return sendResponse(res, 404, false, "Product not found.");
+        }
+
+        // Format reviews with user details
+        const formattedReviews = product.reviews.map(review => ({
+            _id: review._id,
+            rating: review.rating,
+            comment: review.comment,
+            createdAt: review.createdAt,
+            user: {
+                _id: review.user._id,
+                fullName: review.user.fullName,
+                picture: review.user.picture?.data
+                    ? `data:${review.user.picture.contentType};base64,${review.user.picture.data.toString('base64')}`
+                    : null
+            }
+        }));
+
+        return sendResponse(res, 200, true, "Product reviews fetched successfully.", formattedReviews);
+    } catch (err) {
+        dbgr("Get Product Reviews Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong while fetching product reviews.");
+    }
+}
+
+async function getUserReviews(req, res) {
+    try {
+        const userID = req.user.ID;
+
+        // Find user and populate reviews with product details
+        const user = await UserModel.findById(userID)
+            .populate({
+                path: 'reviews.product',
+                select: 'name image brand' // Select necessary product details
+            });
+
+        if (!user) {
+            return sendResponse(res, 404, false, "User not found.");
+        }
+
+        // Format reviews with product details
+        const formattedReviews = user.reviews.map(review => ({
+            _id: review._id,
+            rating: review.rating,
+            comment: review.comment,
+            createdAt: review.createdAt,
+            product: {
+                _id: review.product._id,
+                name: review.product.name,
+                brand: review.product.brand,
+                image: review.product.image?.data
+                    ? `data:${review.product.image.contentType};base64,${review.product.image.data.toString('base64')}`
+                    : null
+            }
+        }));
+
+        return sendResponse(res, 200, true, "User reviews fetched successfully.", formattedReviews);
+    } catch (err) {
+        dbgr("Get User Reviews Error:", err.message);
+        return sendResponse(res, 500, false, "Something went wrong while fetching user reviews.");
+    }
+}
+
 module.exports = {
     loginLimiter,
     registerUser,
@@ -2147,5 +2374,10 @@ module.exports = {
     verifyEmail,
     verifyResetToken,
     resendVerificationOTP,
-    clearCart
+    clearCart,
+    addReview,
+    updateReview,
+    deleteReview,
+    getProductReviews,
+    getUserReviews
 };

@@ -31,7 +31,12 @@ const {
     verifyEmail,
     verifyResetToken,
     resendVerificationOTP,
-    clearCart
+    clearCart,
+    addReview,
+    updateReview,
+    deleteReview,
+    getProductReviews,
+    getUserReviews
 } = require('../controllers/userController');
 
 const router = express.Router();
@@ -73,5 +78,12 @@ router.post('/order/cancel', authenticateUser, cancelOrder);
 router.get('/wishlist', authenticateUser, getWishlist);
 router.post('/wishlist/add', authenticateUser, addToWishlist);
 router.post('/wishlist/remove', authenticateUser, removeFromWishlist);
+
+// Review Routes
+router.post('/reviews', authenticateUser, addReview);
+router.put('/reviews', authenticateUser, updateReview);
+router.delete('/reviews', authenticateUser, deleteReview);
+router.get('/:productID/reviews', getProductReviews);
+router.get('/reviews', authenticateUser, getUserReviews);
 
 module.exports.userRouter = router;
