@@ -189,6 +189,10 @@ async function addProduct(req, res) {
         const { name, description, price, discount, size, color, category, stock } = req.body;
 
         console.log("recieved data = " + req.body)
+        console.log('Received Files:', {
+            mainImage: req.file,
+            additionalImages: req.files
+        });
 
         // Comprehensive validation
         if (!name || name.trim() === '') {
