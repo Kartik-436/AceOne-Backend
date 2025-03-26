@@ -2127,18 +2127,15 @@ async function addReview(req, res) {
         const { productID, rating, comment } = req.body;
         const userID = req.user.ID;
 
-        // Validate input
         if (!rating || !comment) {
             return sendResponse(res, 400, false, "Rating and comment are required.");
         }
 
-        // Check if product exists
         const product = await ProductModel.findById(productID);
         if (!product) {
             return sendResponse(res, 404, false, "Product not found.");
         }
 
-        // Check if user has already reviewed this product
         const existingReview = product.reviews.find(review =>
             review.user.toString() === userID.toString()
         );
@@ -2147,7 +2144,6 @@ async function addReview(req, res) {
             return sendResponse(res, 400, false, "You have already reviewed this product.");
         }
 
-        // Create review object
         const newReview = {
             user: userID,
             rating,
@@ -2165,7 +2161,6 @@ async function addReview(req, res) {
         // Save product
         await product.save();
 
-        // Add review to user's reviews
         const user = await UserModel.findById(userID);
         user.reviews.push({
             product: productID,
@@ -2177,7 +2172,7 @@ async function addReview(req, res) {
         return sendResponse(res, 201, true, "Review added successfully.", newReview);
     } catch (err) {
         dbgr("Add Review Error:", err.message);
-        return sendResponse(res, 500, false, "Something went wrong while adding review.");
+        return sendResponse(res, 500, false, "Something went wrong while adding review." + err, []);
     }
 }
 
