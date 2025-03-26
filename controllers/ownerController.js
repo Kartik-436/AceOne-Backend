@@ -297,9 +297,8 @@ async function updateProduct(req, res) {
             return sendResponse(res, 404, false, "Product not found");
         }
 
-        const { name, description, price, discount, size, color, category, stock } = req.body;
+        const { description, price, discount, size, color, category, stock } = req.body;
         let updateFields = {
-            name,
             description,
             price,
             discount,
