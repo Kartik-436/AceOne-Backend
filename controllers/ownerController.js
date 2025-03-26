@@ -186,13 +186,45 @@ async function deleteOwner(req, res) {
 
 async function addProduct(req, res) {
     try {
-        let discountPrice = 0;
         const { name, description, price, discount, size, color, category, stock } = req.body;
 
-        // Calculate discount price if discount is provided
+        // Comprehensive validation
+        if (!name || name.trim() === '') {
+            return sendResponse(res, 400, false, "Product name is required");
+        }
+
+        if (!description || description.trim() === '') {
+            return sendResponse(res, 400, false, "Product description is required");
+        }
+
+        if (!price || price < 0) {
+            return sendResponse(res, 400, false, "Valid price is required");
+        }
+
+        if (!size || size.length === 0) {
+            return sendResponse(res, 400, false, "At least one size is required");
+        }
+
+        if (!color || color.length === 0) {
+            return sendResponse(res, 400, false, "At least one color is required");
+        }
+
+        if (!category) {
+            return sendResponse(res, 400, false, "Category is required");
+        }
+
+        if (stock === undefined || stock < 0) {
+            return sendResponse(res, 400, false, "Valid stock quantity is required");
+        }
+
+        // Discount calculation
+        let discountPrice = price;
         if (discount !== undefined && discount !== null) {
+            if (discount < 0 || discount > 100) {
+                return sendResponse(res, 400, false, "Discount must be between 0 and 100");
+            }
             let disc = (price * discount) / 100;
-            discountPrice = price - disc;
+            discountPrice = Number((price - disc).toFixed(2));
         }
 
         const product = new productModel({
@@ -208,15 +240,25 @@ async function addProduct(req, res) {
             owner: req.user.ID
         });
 
-        // Handle main product image
+        // Image handling with validation
         if (req.file) {
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+            const maxSize = 5 * 1024 * 1024; // 5MB
+
+            if (!allowedTypes.includes(req.file.mimetype)) {
+                return sendResponse(res, 400, false, "Invalid image type");
+            }
+
+            if (req.file.size > maxSize) {
+                return sendResponse(res, 400, false, "Image size should be less than 5MB");
+            }
+
             product.image = {
                 data: req.file.buffer,
                 contentType: req.file.mimetype,
             };
         }
 
-        // Handle additional images if multiple files are uploaded
         if (req.files && req.files.additionalImages) {
             product.additionalImages = req.files.additionalImages.map(file => ({
                 data: file.buffer,
@@ -237,6 +279,7 @@ async function addProduct(req, res) {
             image: base64Image,
         });
     } catch (error) {
+        console.error('Product addition error:', error);
         sendResponse(res, 500, false, "Error adding product", error.message);
     }
 }
