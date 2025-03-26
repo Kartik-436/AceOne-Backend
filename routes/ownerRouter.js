@@ -68,7 +68,10 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Owner Add Product Route
-router.post('/add-product', isAdmin, productValidator, checkValidation, upload.single("image"), addProduct);
+router.post('/add-product', isAdmin, productValidator, checkValidation, upload.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'additionalImages', maxCount: 5 }
+]), addProduct);
 
 // Owner Update Product Route
 router.put('/update-product/:id', isAdmin, productValidator, checkValidation, upload.single("image"), updateProduct);
