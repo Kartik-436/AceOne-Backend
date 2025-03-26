@@ -2154,12 +2154,11 @@ async function addReview(req, res) {
         // Add review to product
         product.reviews.push(newReview);
 
-        // Update product ratings
         const totalRatings = product.reviews.reduce((sum, review) => sum + review.rating, 0);
         product.ratings = totalRatings / product.reviews.length;
 
         // Save product
-        await product.save();
+        await product.save({ validateBeforeSave: false });
 
         const user = await UserModel.findById(userID);
         user.reviews.push({
@@ -2211,7 +2210,7 @@ async function updateReview(req, res) {
         product.ratings = totalRatings / product.reviews.length;
 
         // Save product
-        await product.save();
+        await product.save({ validateBeforeSave: false });
 
         // Update user's review
         await UserModel.findOneAndUpdate(
@@ -2255,7 +2254,7 @@ async function deleteReview(req, res) {
                 ? totalRatings / product.reviews.length
                 : 0;
 
-            await product.save();
+            await product.save({ validateBeforeSave: false });
         }
 
         await UserModel.findByIdAndUpdate(userID, {
