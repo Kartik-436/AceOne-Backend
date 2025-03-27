@@ -90,7 +90,7 @@ router.get('/orders/:orderId/invoice', authenticateUser, async (req, res) => {
             message: "Invoice details fetched successfully",
             data: {
                 ...invoice.toObject(),
-                downloadUrl: `https://aceone-backend.up.railway.app/inv/invoices/${invoice._id}`
+                downloadUrl: `https://aceone-backend-wd1f.onrender.com/inv/invoices/${invoice._id}`
             }
         });
 
