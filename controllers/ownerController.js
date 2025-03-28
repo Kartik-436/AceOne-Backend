@@ -503,36 +503,33 @@ async function getAllOrders(req, res) {
     try {
         const orders = await OrderModel.find()
             .populate("items.product")
-            .populate("customer");
+            .populate("customer")
+            .lean(); // Converts to plain JS object for better performance
 
         // Convert product images to Base64
-        const updatedOrders = orders.map(order => {
-            return {
-                ...order._doc,
-                items: order.items.map(item => {
-                    if (item.product?.image) {
-                        // Convert image to Base64
-                        const imageBuffer = Buffer.from(item.product.image, "binary");
-                        const base64Image = `data:image/jpeg;base64,${imageBuffer.toString("base64")}`;
-                        return {
-                            ...item._doc,
-                            product: {
-                                ...item.product._doc,
-                                image: base64Image
-                            }
-                        };
-                    }
-                    return item;
-                })
-            };
-        });
+        const updatedOrders = orders.map(order => ({
+            ...order,
+            items: order.items.map(item => {
+                if (item.product?.image && Buffer.isBuffer(item.product.image)) {
+                    // Convert image to Base64 if it's stored as Buffer
+                    const base64Image = `data:image/jpeg;base64,${item.product.image.toString("base64")}`;
+                    return {
+                        ...item,
+                        product: {
+                            ...item.product,
+                            image: base64Image
+                        }
+                    };
+                }
+                return item;
+            })
+        }));
 
         sendResponse(res, 200, true, "Orders fetched successfully", updatedOrders);
     } catch (error) {
         sendResponse(res, 500, false, error.message);
     }
 }
-
 
 async function getSingleOrder(req, res) {
     try {
