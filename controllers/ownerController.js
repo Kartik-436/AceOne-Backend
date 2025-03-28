@@ -505,11 +505,34 @@ async function getAllOrders(req, res) {
             .populate("items.product")
             .populate("customer");
 
-        sendResponse(res, 200, true, "Orders fetched successfully", orders);
+        // Convert product images to Base64
+        const updatedOrders = orders.map(order => {
+            return {
+                ...order._doc,
+                items: order.items.map(item => {
+                    if (item.product?.image) {
+                        // Convert image to Base64
+                        const imageBuffer = Buffer.from(item.product.image, "binary");
+                        const base64Image = `data:image/jpeg;base64,${imageBuffer.toString("base64")}`;
+                        return {
+                            ...item._doc,
+                            product: {
+                                ...item.product._doc,
+                                image: base64Image
+                            }
+                        };
+                    }
+                    return item;
+                })
+            };
+        });
+
+        sendResponse(res, 200, true, "Orders fetched successfully", updatedOrders);
     } catch (error) {
         sendResponse(res, 500, false, error.message);
     }
 }
+
 
 async function getSingleOrder(req, res) {
     try {
