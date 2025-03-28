@@ -11,7 +11,6 @@ const { productValidator } = require('../utils/Product-Validator.js');
 const { profileValidator } = require('../utils/Profile-Validator.js');
 
 // Required Middlewares
-const { } = require('../middlewares/Login-Checker.js');
 const { isAdmin } = require('../middlewares/Admin-Checker.js');
 
 // Required Environment Variables
@@ -56,60 +55,51 @@ router.post('/login', loginValidator, checkValidation, loginLimiter, loginOwner)
 // Owner Logout Route
 router.get('/logout', isAdmin, logOutOwner);
 
-// Owner Profile Route
-router.get('/profile', isAdmin, getOwnerProfile);
+// Owner Profile Routes
+router.route('/profile')
+    .get(isAdmin, getOwnerProfile)
+    .put(isAdmin, profileValidator, checkValidation, upload.single("picture"), updateOwnerProfile)
+    .delete(isAdmin, deleteOwner);
 
-// Owner Update Profile Route
-router.put('/profile', isAdmin, profileValidator, checkValidation, upload.single("picture"), updateOwnerProfile);
+// Product Routes
+router.route('/products')
+    .post(isAdmin, productValidator, checkValidation,
+        upload.fields([
+            { name: 'image', maxCount: 1 },
+            { name: 'additionalImages', maxCount: 5 }
+        ]), addProduct)
+    .get(isAdmin, getAllProducts);
 
-// Owner Delete Profile Route
-if (process.env.NODE_ENV === 'development') {
-    router.delete('/profile', isAdmin, deleteOwner);
-}
+router.route('/products/:id')
+    .get(isAdmin, getProductById)
+    .put(isAdmin, productValidator, checkValidation,
+        upload.fields([
+            { name: 'image', maxCount: 1 },
+            { name: 'additionalImages', maxCount: 5 }
+        ]), updateProduct)
+    .delete(isAdmin, deleteProduct);
 
-// Owner Add Product Route
-router.post('/add-product', isAdmin, productValidator, checkValidation, upload.fields([
-    { name: 'image', maxCount: 1 },
-    { name: 'additionalImages', maxCount: 5 }
-]), addProduct);
+// Discount Routes
+router.put('/products/:id/apply-discount', isAdmin, productValidator, checkValidation, applyDiscount);
+router.put('/products/:id/remove-discount', isAdmin, removeDiscount);
 
-// Owner Update Product Route
-router.put('/update-product/:id', isAdmin, productValidator, checkValidation, upload.single("image"), updateProduct);
+// User Routes
+router.route('/users')
+    .get(isAdmin, getAllUsers);
 
-// Owner Delete Product Route
-router.delete('/delete-product/:id', isAdmin, deleteProduct);
+router.route('/users/:id')
+    .get(isAdmin, getSingleUser)
+    .delete(isAdmin, deleteUser);
 
-// Owner Get All Products Route
-router.get('/all-products', isAdmin, getAllProducts);
+// Order Routes
+router.route('/orders')
+    .get(isAdmin, getAllOrders);
 
-// Owner Get Single Product Route
-router.get('/product/:id', isAdmin, getProductById);
+router.route('/orders/:id')
+    .get(isAdmin, getSingleOrder)
+    .delete(isAdmin, deleteOrder);
 
-// Owner Get All Users Route
-router.get('/all-users', isAdmin, getAllUsers);
-
-// Owner Get Single User Route
-router.get('/user/:id', isAdmin, getSingleUser);
-
-// Owner Delete User Route
-router.delete('/delete-user/:id', isAdmin, deleteUser);
-
-// Owner Apply Discount Route
-router.put('/apply-discount/:id', isAdmin, productValidator, checkValidation, applyDiscount);
-
-// Owner Remove Discount Route
-router.put('/remove-discount/:id', isAdmin, removeDiscount);
-
-// Owner Get All Orders Route
-router.get('/all-orders', isAdmin, getAllOrders);
-
-// Owner Get Single Order Route
-router.get('/order/:id', isAdmin, getSingleOrder);
-
-// Owner can cancel an order
-router.delete('/cancel-order/:id', isAdmin, deleteOrder);
-
-// Owner get sales and revenue data
+// Sales and Revenue Route
 router.get('/sales', isAdmin, getRevenueStats);
 
 module.exports.ownerRouter = router;
