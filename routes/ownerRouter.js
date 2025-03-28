@@ -63,22 +63,13 @@ router.route('/profile')
 
 // Product Routes
 router.route('/products')
-    .post(isAdmin, productValidator, checkValidation,
-        upload.fields([
-            { name: 'image', maxCount: 1 },
-            { name: 'additionalImages', maxCount: 5 }
-        ]), addProduct)
-    .get(isAdmin, getAllProducts);
-
-router.route('/products/:id')
-    .get(isAdmin, getProductById)
-    .put(isAdmin,
+    .post(isAdmin,
         (req, res, next) => {
             console.log("🔥 Debugging Product Upload before multer :");
             console.log("Body:", req.body);  // Check if body is present
             console.log("Files:", req.files); // Check if files are uploaded
             next();
-        },
+        }, productValidator, checkValidation,
         upload.fields([
             { name: 'image', maxCount: 1 },
             { name: 'additionalImages', maxCount: 5 }
@@ -88,7 +79,16 @@ router.route('/products/:id')
             console.log("Body:", req.body);  // Check if body is present
             console.log("Files:", req.files); // Check if files are uploaded
             next();
-        },
+        }, addProduct)
+    .get(isAdmin, getAllProducts);
+
+router.route('/products/:id')
+    .get(isAdmin, getProductById)
+    .put(isAdmin,
+        upload.fields([
+            { name: 'image', maxCount: 1 },
+            { name: 'additionalImages', maxCount: 5 }
+        ]),
         productValidator, checkValidation, updateProduct)
     .delete(isAdmin, deleteProduct);
 
