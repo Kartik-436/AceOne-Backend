@@ -414,14 +414,34 @@ async function getAllUsers(req, res) {
 
         // Format Users
         const formattedUsers = users.map(user => {
-            let base64Image = null;
+            // Convert user's profile picture to Base64
+            let base64ProfileImage = null;
             if (user.picture?.data && user.picture?.contentType) {
-                base64Image = `data:${user.picture.contentType};base64,${user.picture.data.toString("base64")}`;
+                base64ProfileImage = `data:${user.picture.contentType};base64,${user.picture.data.toString("base64")}`;
             }
+
+            // Convert order items' product images to Base64
+            const formattedOrders = user.orders.map(order => ({
+                ...order,
+                items: order.items.map(item => {
+                    if (item.product?.image) {
+                        base64ProductImage = `data:${item.product?.image.contentType};base64,${item.product?.image.data.toString("base64")}`;
+                        return {
+                            ...item,
+                            product: {
+                                ...item.product,
+                                image: base64ProductImage
+                            }
+                        };
+                    }
+                    return item;
+                })
+            }));
 
             return {
                 ...user,
-                picture: base64Image, // Will be null if no valid picture data
+                picture: base64ProfileImage, // Converted user profile picture
+                orders: formattedOrders // Orders with product images converted to Base64
             };
         });
 
