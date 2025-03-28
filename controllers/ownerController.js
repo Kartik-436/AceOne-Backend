@@ -404,7 +404,7 @@ async function getProductById(req, res) {
 
 async function getAllUsers(req, res) {
     try {
-        const users = await UserModel.find()
+        const users = await userModel.find()
             .select('-password') // Exclude password
             .populate({
                 path: 'orders',
