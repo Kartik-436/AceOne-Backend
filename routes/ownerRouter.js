@@ -73,6 +73,12 @@ router.route('/products')
 router.route('/products/:id')
     .get(isAdmin, getProductById)
     .put(isAdmin,
+        (req, res, next) => {
+            console.log("🔥 Debugging Product Upload before multer :");
+            console.log("Body:", req.body);  // Check if body is present
+            console.log("Files:", req.files); // Check if files are uploaded
+            next();
+        },
         upload.fields([
             { name: 'image', maxCount: 1 },
             { name: 'additionalImages', maxCount: 5 }
