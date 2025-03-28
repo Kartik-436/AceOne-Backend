@@ -186,6 +186,11 @@ async function deleteOwner(req, res) {
 
 async function addProduct(req, res) {
     try {
+        console.log("🛠 Incoming Request:");
+        console.log("Headers:", req.headers);
+        console.log("Body:", req.body);
+        console.log("Files:", req.files);
+
         const { name, description, price, discount, size, color, category, stock } = req.body;
 
         // Comprehensive validation (mostly good as is)

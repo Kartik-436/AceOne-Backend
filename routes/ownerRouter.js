@@ -44,14 +44,6 @@ const {
 // Express Router
 const router = express.Router();
 
-router.use((req, res, next) => {
-    console.log("🛠 Incoming Request:");
-    console.log("Headers:", req.headers);
-    console.log("Body:", req.body);
-    console.log("Files:", req.files);
-    next();
-});
-
 // Owner Register Route
 if (process.env.NODE_ENV === 'development') {
     router.post('/register', registerValidator, checkValidation, registerOwner);
@@ -106,6 +98,12 @@ router.route('/orders')
 router.route('/orders/:id')
     .get(isAdmin, getSingleOrder)
     .delete(isAdmin, deleteOrder);
+
+router.post('/test', upload.none(), (req, res) => {
+    console.log("Test Body:", req.body);
+    res.json({ success: true, receivedBody: req.body });
+});
+
 
 // Sales and Revenue Route
 router.get('/sales', isAdmin, getRevenueStats);
