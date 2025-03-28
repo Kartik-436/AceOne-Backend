@@ -404,25 +404,23 @@ async function getProductById(req, res) {
 
 async function getAllUsers(req, res) {
     try {
-        const users = await userModel.find().select('-password').populate({
-            path: 'orders',
-            populate: {
-                path: 'items',
-                populate: {
-                    path: 'product',
-                    model: 'Product'
-                }
-            }
-        });
+        const users = await UserModel.find()
+            .select('-password') // Exclude password
+            .populate({
+                path: 'orders',
+                populate: 'items.product'
+            })
+            .lean(); // Convert Mongoose documents to plain objects for efficiency
 
+        // Format Users
         const formattedUsers = users.map(user => {
             let base64Image = null;
-            if (user.picture && user.picture.data) {
+            if (user.picture?.data && user.picture?.contentType) {
                 base64Image = `data:${user.picture.contentType};base64,${user.picture.data.toString("base64")}`;
             }
 
             return {
-                ...user.toObject(),
+                ...user,
                 picture: base64Image, // Will be null if no valid picture data
             };
         });
