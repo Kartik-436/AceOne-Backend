@@ -188,7 +188,8 @@ async function addProduct(req, res) {
     try {
         const { name, description, price, discount, size, color, category, stock } = req.body;
 
-        console.log(req.body);
+        console.log("Body:", req.body);  // Ensure name is here
+        console.log("Files:", req.files);
 
         // Comprehensive validation (mostly good as is)
         if (!name || name.trim() === '') {

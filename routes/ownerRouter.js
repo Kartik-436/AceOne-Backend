@@ -44,6 +44,14 @@ const {
 // Express Router
 const router = express.Router();
 
+router.use((req, res, next) => {
+    console.log("🛠 Incoming Request:");
+    console.log("Headers:", req.headers);
+    console.log("Body:", req.body);
+    console.log("Files:", req.files);
+    next();
+});
+
 // Owner Register Route
 if (process.env.NODE_ENV === 'development') {
     router.post('/register', registerValidator, checkValidation, registerOwner);
