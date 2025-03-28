@@ -512,7 +512,7 @@ async function getAllOrders(req, res) {
             items: order.items.map(item => {
                 if (item.product?.image && Buffer.isBuffer(item.product.image)) {
                     // Convert image to Base64 if it's stored as Buffer
-                    const base64Image = `data:image/jpeg;base64,${item.product.image.toString("base64")}`;
+                    base64Image = `data:${item.product.image.contentType};base64,${item.product.image.data.toString("base64")}`;
                     return {
                         ...item,
                         product: {
