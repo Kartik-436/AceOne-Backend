@@ -72,11 +72,18 @@ router.route('/products')
 
 router.route('/products/:id')
     .get(isAdmin, getProductById)
-    .put(isAdmin, productValidator, checkValidation,
+    .put(isAdmin,
         upload.fields([
             { name: 'image', maxCount: 1 },
             { name: 'additionalImages', maxCount: 5 }
-        ]), updateProduct)
+        ]),
+        (req, res, next) => {
+            console.log("🔥 Debugging Product Upload:");
+            console.log("Body:", req.body);  // Check if body is present
+            console.log("Files:", req.files); // Check if files are uploaded
+            next();
+        },
+        productValidator, checkValidation, updateProduct)
     .delete(isAdmin, deleteProduct);
 
 // Discount Routes
