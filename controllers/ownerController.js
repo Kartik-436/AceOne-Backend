@@ -188,6 +188,8 @@ async function addProduct(req, res) {
     try {
         const { name, description, price, discount, size, color, category, stock } = req.body;
 
+        console.log(req.body);
+
         // Comprehensive validation (mostly good as is)
         if (!name || name.trim() === '') {
             return sendResponse(res, 400, false, "Product name is required");
