@@ -60,7 +60,7 @@ const productValidator = [
             // Capitalize first letter
             return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
         })
-        .isIn(['Mens', 'Womens', 'Kids']).withMessage("Invalid category. Must be one of: Men, Women, Kids"),
+        .isIn(['Mens', 'Womens', 'Kids']).withMessage("Invalid category. Must be one of: Mens, Womens, Kids"),
 
     // Stock validation
     body("stock")
