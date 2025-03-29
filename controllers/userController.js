@@ -1872,7 +1872,7 @@ async function verifyPayment(req, res) {
                 if (!product.customer.includes(order.customer)) {
                     product.customer.push(order.customer);
                 }
-                await product.save();
+                await product.save({ validateBeforeSave: false });
             }
         }
 
@@ -1895,7 +1895,7 @@ async function verifyPayment(req, res) {
             await transporter.sendMail(unsuccessEmail);
         }
 
-        await order.save();
+        await order.save({ validateBeforeSave: false });
 
         return sendResponse(res, 200, true, "Payment verified successfully.", {
             order,
@@ -1967,7 +1967,7 @@ async function cancelOrder(req, res) {
             const product = await ProductModel.findById(item.product);
             if (product) {
                 product.stock += item.quantity;
-                await product.save();
+                await product.save({ validateBeforeSave: false });
             }
         }
 
