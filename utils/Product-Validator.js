@@ -58,9 +58,9 @@ const productValidator = [
         .notEmpty().withMessage("Category is required")
         .customSanitizer(value => {
             // Capitalize first letter
-            return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+            return value.toLowerCase();
         })
-        .isIn(['Mens', 'Womens', 'Kids']).withMessage("Invalid category. Must be one of: Mens, Womens, Kids"),
+        .isIn(['mens', 'womens', 'kids']).withMessage("Invalid category. Must be one of: Mens, Womens, Kids"),
 
     // Stock validation
     body("stock")
