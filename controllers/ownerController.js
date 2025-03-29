@@ -298,15 +298,26 @@ async function updateProduct(req, res) {
             }
         }
 
-        // Handle main product image update
-        if (req.file) {
+        if (req.files && req.files.image && req.files.image[0]) {
+            const mainImageFile = req.files.image[0];
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+            const maxSize = 5 * 1024 * 1024; // 5MB
+
+            if (!allowedTypes.includes(mainImageFile.mimetype)) {
+                return sendResponse(res, 400, false, "Invalid image type");
+            }
+
+            if (mainImageFile.size > maxSize) {
+                return sendResponse(res, 400, false, "Image size should be less than 5MB");
+            }
+
             updateFields.image = {
-                data: req.file.buffer,
-                contentType: req.file.mimetype,
+                data: mainImageFile.buffer,
+                contentType: mainImageFile.mimetype,
             };
         }
 
-        // Handle additional images update
+        // Additional images handling (looks good)
         if (req.files && req.files.additionalImages) {
             updateFields.additionalImages = req.files.additionalImages.map(file => ({
                 data: file.buffer,

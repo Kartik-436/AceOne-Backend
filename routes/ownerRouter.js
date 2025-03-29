@@ -69,7 +69,6 @@ router.route('/products')
             { name: 'image', maxCount: 1 },
             { name: 'additionalImages', maxCount: 5 }
         ]),
-        // Parse comma-separated strings into arrays
         (req, res, next) => {
             if (req.body.size && typeof req.body.size === 'string') {
                 req.body.size = req.body.size.split(',').map(item => item.trim());
@@ -93,7 +92,20 @@ router.route('/products/:id')
             { name: 'image', maxCount: 1 },
             { name: 'additionalImages', maxCount: 5 }
         ]),
-        productValidator, checkValidation, updateProduct)
+        (req, res, next) => {
+            if (req.body.size && typeof req.body.size === 'string') {
+                req.body.size = req.body.size.split(',').map(item => item.trim());
+            }
+
+            if (req.body.color && typeof req.body.color === 'string') {
+                req.body.color = req.body.color.split(',').map(item => item.trim());
+            }
+
+            next();
+        },
+        productValidator,
+        checkValidation,
+        updateProduct)
     .delete(isAdmin, deleteProduct);
 
 // Discount Routes
