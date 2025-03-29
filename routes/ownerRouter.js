@@ -86,7 +86,6 @@ router.route('/products')
     .get(isAdmin, getAllProducts);
 
 router.route('/products/:id')
-    .get(isAdmin, getProductById)
     .put(isAdmin,
         upload.fields([
             { name: 'image', maxCount: 1 },
@@ -108,6 +107,7 @@ router.route('/products/:id')
         productValidator,
         checkValidation,
         updateProduct)
+    .get(isAdmin, getProductById)
     .delete(isAdmin, deleteProduct);
 
 // Discount Routes
