@@ -67,8 +67,8 @@ const userSchema = new mongoose.Schema({
         }
     },
     address: {
-        type: String,
-        default: "",
+        formattedAddress: { type: String, default: "" },
+        googleMapsLink: { type: String, default: "" }
     },
     wishlist: [{
         type: mongoose.Schema.Types.ObjectId,
