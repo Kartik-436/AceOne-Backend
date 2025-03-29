@@ -217,22 +217,22 @@ async function addProduct(req, res) {
             reviews: [] // Initialize empty reviews array
         });
 
-        // Image handling (looks good)
-        if (req.file) {
+        if (req.files && req.files.image && req.files.image[0]) {
+            const mainImageFile = req.files.image[0];
             const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
             const maxSize = 5 * 1024 * 1024; // 5MB
 
-            if (!allowedTypes.includes(req.file.mimetype)) {
+            if (!allowedTypes.includes(mainImageFile.mimetype)) {
                 return sendResponse(res, 400, false, "Invalid image type");
             }
 
-            if (req.file.size > maxSize) {
+            if (mainImageFile.size > maxSize) {
                 return sendResponse(res, 400, false, "Image size should be less than 5MB");
             }
 
             product.image = {
-                data: req.file.buffer,
-                contentType: req.file.mimetype,
+                data: mainImageFile.buffer,
+                contentType: mainImageFile.mimetype,
             };
         }
 
