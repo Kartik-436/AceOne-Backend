@@ -64,22 +64,19 @@ router.route('/profile')
 // Product Routes
 router.route('/products')
     .post(isAdmin,
-        (req, res, next) => {
-            console.log("🔥 Debugging Product Upload before multer :");
-            console.log("Body:", req.body);  // Check if body is present
-            console.log("Files:", req.files); // Check if files are uploaded
-            next();
-        }, productValidator, checkValidation,
         upload.fields([
             { name: 'image', maxCount: 1 },
             { name: 'additionalImages', maxCount: 5 }
         ]),
         (req, res, next) => {
             console.log("🔥 Debugging Product Upload:");
-            console.log("Body:", req.body);  // Check if body is present
-            console.log("Files:", req.files); // Check if files are uploaded
+            console.log("Body:", req.body);
+            console.log("Files:", req.files);
             next();
-        }, addProduct)
+        },
+        productValidator,
+        checkValidation,
+        addProduct)
     .get(isAdmin, getAllProducts);
 
 router.route('/products/:id')
