@@ -58,7 +58,7 @@ const productValidator = [
         .notEmpty().withMessage("Category is required")
         .customSanitizer(value => {
             // Capitalize first letter
-            return value.toLowerCase();
+            return value?.toLowerCase();
         })
         .isIn(['mens', 'womens', 'kids']).withMessage("Invalid category. Must be one of: Mens, Womens, Kids"),
 
