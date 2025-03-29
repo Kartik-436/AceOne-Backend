@@ -64,14 +64,26 @@ router.route('/profile')
 // Product Routes
 router.route('/products')
     .post(isAdmin,
+        // First handle file uploads
         upload.fields([
             { name: 'image', maxCount: 1 },
             { name: 'additionalImages', maxCount: 5 }
         ]),
+        // Parse comma-separated strings into arrays
         (req, res, next) => {
             console.log("🔥 Debugging Product Upload:");
             console.log("Body:", req.body);
             console.log("Files:", req.files);
+
+            // Convert comma-separated strings to arrays
+            if (req.body.size && typeof req.body.size === 'string') {
+                req.body.size = req.body.size.split(',').map(item => item.trim());
+            }
+
+            if (req.body.color && typeof req.body.color === 'string') {
+                req.body.color = req.body.color.split(',').map(item => item.trim());
+            }
+
             next();
         },
         productValidator,
