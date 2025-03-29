@@ -1716,6 +1716,7 @@ async function placeOrder(req, res) {
         }
 
         discountedTotalAmount += deliveryFee;
+        discountedTotalAmount = Math.round(discountedTotalAmount);
 
         let paymentResponse = null;
 
