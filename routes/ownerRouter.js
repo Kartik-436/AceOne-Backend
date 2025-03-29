@@ -93,6 +93,8 @@ router.route('/products/:id')
             { name: 'additionalImages', maxCount: 5 }
         ]),
         (req, res, next) => {
+            console.log("request body : ", req.body);
+
             if (req.body.size && typeof req.body.size === 'string') {
                 req.body.size = req.body.size.split(',').map(item => item.trim());
             }
