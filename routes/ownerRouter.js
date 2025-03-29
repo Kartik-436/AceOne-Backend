@@ -7,7 +7,7 @@ const upload = require('../configs/Multer-Config.js');
 // Required utilities
 const { registerValidator, checkValidation } = require('../utils/Register-Validator.js');
 const { loginValidator } = require('../utils/Login-Validator.js');
-const { productValidator } = require('../utils/Product-Validator.js');
+const { productValidator, productUpdateValidator } = require('../utils/Product-Validator.js');
 const { profileValidator } = require('../utils/Profile-Validator.js');
 
 // Required Middlewares
@@ -104,7 +104,7 @@ router.route('/products/:id')
 
             next();
         },
-        productValidator,
+        productUpdateValidator,
         checkValidation,
         updateProduct)
     .get(isAdmin, getProductById)
