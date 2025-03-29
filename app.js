@@ -46,7 +46,7 @@ app.use(express.json());
 app.use(timeoutHandler);
 
 // Status flow
-const statusFlow = ["Pending", "Processing", "Shipped", "Out for Delivery", "Delivered"];
+const statusFlow = ["Pending", "Confirmed", "Processing", "Shipped", "Delivered"];
 
 // Run every 24 hours
 cron.schedule("0 0 * * *", async () => {
