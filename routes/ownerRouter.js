@@ -133,7 +133,6 @@ router.post('/test', upload.none(), (req, res) => {
     res.json({ success: true, receivedBody: req.body });
 });
 
-
 // Sales and Revenue Route
 router.get('/sales', isAdmin, getRevenueStats);
 

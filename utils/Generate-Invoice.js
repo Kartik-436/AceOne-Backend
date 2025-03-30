@@ -128,7 +128,7 @@ async function generateInvoice(order) {
                         });
 
                         await invoice.save();
-                        const invoiceUrl = `https://aceone-backend-wd1f.onrender.com/inv/invoices/${invoice._id}`;
+                        const invoiceUrl = `https://aceone-backend-0ap8.onrender.com/inv/invoices/${invoice._id}`;
                         console.log("Invoice generated successfully:", invoiceUrl);
                         resolve(invoiceUrl);
                     } catch (error) {
