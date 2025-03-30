@@ -370,9 +370,17 @@ async function getAllProducts(req, res) {
                 base64Image = `data:${product.image.contentType};base64,${product.image.data.toString("base64")}`;
             }
 
+            let base64AdditionalImages = [];
+            if (product.additionalImages && Array.isArray(product.additionalImages)) {
+                base64AdditionalImages = product.additionalImages.map(img => 
+                    `data:${img.contentType};base64,${img.data.toString("base64")}`
+                );
+            }
+
             return {
                 ...product.toObject(),
                 image: base64Image,
+                additionalImages: base64AdditionalImages // Now sending as proper base64 URL strings
             };
         });
 
