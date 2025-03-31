@@ -372,7 +372,7 @@ async function getAllProducts(req, res) {
 
             let base64AdditionalImages = [];
             if (product.additionalImages && Array.isArray(product.additionalImages)) {
-                base64AdditionalImages = product.additionalImages.map(img => 
+                base64AdditionalImages = product.additionalImages.map(img =>
                     `data:${img.contentType};base64,${img.data.toString("base64")}`
                 );
             }
@@ -630,6 +630,69 @@ async function getRevenueStats(req, res) {
     }
 }
 
+async function getDailyRevenueStats(req, res) {
+    try {
+        // Get the last 30 days of data
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const orders = await OrderModel.find({
+            orderStatus: { $ne: "Cancelled" },
+            orderDate: { $gte: thirtyDaysAgo }
+        }).populate({
+            path: 'items.product',
+            select: 'price discountPrice discount'
+        });
+
+        const dailyStats = {};
+
+        orders.forEach(order => {
+            const date = order.orderDate.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+
+            if (!dailyStats[date]) {
+                dailyStats[date] = { sales: 0, revenue: 0, orderCount: 0 };
+            }
+
+            dailyStats[date].orderCount += 1;
+
+            order.items.forEach(item => {
+                dailyStats[date].sales += item.quantity;
+
+                const priceToUse = item.discountPrice ||
+                    (item.product.discountPrice ||
+                        item.product.price * (1 - (item.product.discount || 0) / 100));
+                dailyStats[date].revenue += item.quantity * priceToUse;
+            });
+        });
+
+        // Convert to array and sort by date
+        const result = Object.entries(dailyStats)
+            .map(([date, stats]) => ({ date, ...stats }))
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Add status analytics
+        const statusCounts = await OrderModel.aggregate([
+            { $match: { orderDate: { $gte: thirtyDaysAgo } } },
+            { $group: { _id: "$orderStatus", count: { $sum: 1 } } }
+        ]);
+
+        const statusStats = {};
+        statusCounts.forEach(item => {
+            statusStats[item._id] = item.count;
+        });
+
+        sendResponse(res, 200, true, "Daily revenue statistics fetched successfully", {
+            dailyStats: result,
+            statusStats,
+            totalRevenue: result.reduce((sum, day) => sum + day.revenue, 0),
+            totalSales: result.reduce((sum, day) => sum + day.sales, 0),
+            totalOrders: result.reduce((sum, day) => sum + day.orderCount, 0)
+        });
+    } catch (error) {
+        sendResponse(res, 500, false, error.message);
+    }
+}
+
 module.exports = {
     loginLimiter,
     registerOwner,
@@ -652,4 +715,5 @@ module.exports = {
     getSingleOrder,
     deleteOrder,
     getRevenueStats,
+    getDailyRevenueStats
 };

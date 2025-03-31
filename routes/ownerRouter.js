@@ -39,6 +39,7 @@ const {
     getSingleOrder,
     deleteOrder,
     getRevenueStats,
+    getDailyRevenueStats
 } = require("../controllers/ownerController");
 
 // Express Router
@@ -128,12 +129,8 @@ router.route('/orders/:id')
     .get(isAdmin, getSingleOrder)
     .delete(isAdmin, deleteOrder);
 
-router.post('/test', upload.none(), (req, res) => {
-    console.log("Test Body:", req.body);
-    res.json({ success: true, receivedBody: req.body });
-});
-
 // Sales and Revenue Route
 router.get('/sales', isAdmin, getRevenueStats);
+router.get('/daily-sales', isAdmin, getDailyRevenueStats);
 
 module.exports.ownerRouter = router;
